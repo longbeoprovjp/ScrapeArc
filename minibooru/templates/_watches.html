@@ -1,0 +1,33 @@
+<div id="wbox" {% if current %}data-busy="1"{% endif %}>
+{% if current %}<div class="busybar" {% if current_url %}data-href="{{ current_url }}" title="Click to open the live progress page"{% endif %}>
+<span>⏳ Running now: <a href="{{ current_url or '#' }}"><b style="word-break:break-all">{{ current }}</b></a>{% if current_for %} <span class="mut">· running for {{ current_for }}</span>{% endif %}<br><span class="mut">Click here to watch its progress. A new scrape can start once it finishes.</span></span>
+{% if current_stop %}<form method="post" action="{{ current_stop }}" style="margin:0"><input type="hidden" name="next" value="/scrape"><button class="danger">Stop</button></form>{% endif %}</div>{% endif %}
+<h3>Auto-rescan (watches)</h3>
+<p class="note">{% if scheduler %}The scheduler is running: each watch rescans its page on its own countdown while this server is up, one scrape at a time. A rescan stops as soon as it reaches a post that is already saved (or its date limit) and waits for the next countdown.{% else %}The scheduler is off in this process.{% endif %} Times are shown in your local time.</p>
+{% if watches %}<table class="wtable"><tr><th>Page</th><th>Stops</th><th>Status</th><th>Last run</th><th></th></tr>
+{% for w in watches %}<tr>
+<td style="word-break:break-all"><a href="/watch/{{ w.id }}">{{ w.url }}</a><div class="mut">{{ w.keywords|replace('\n', ', ') }}</div></td>
+<td>{{ w.stop_text }}<div class="mut">every {{ w.interval_min }} min</div></td>
+<td>{% if w.state == 'running' %}<b class="st run">● Running now</b> <a href="/watch/{{ w.id }}">live log</a>
+{% elif w.state == 'paused' %}<span class="st">Paused</span>
+{% elif w.state == 'queued' %}<span class="st">Queued, starts shortly</span>
+{% else %}<span class="st">Next run in {{ w.in_min }} min</span>{% endif %}</td>
+<td>{% if w.last_run %}<time class="utc" data-utc="{{ w.last_run }}">{{ w.last_run }} UTC</time>{% else %}<span class="mut">never</span>{% endif %}<div class="mut">{{ w.last_result or '' }}</div></td>
+<td><div class="row" style="margin:0">
+{% if w.state == 'running' %}<form method="post" action="/watches/{{ w.id }}/stop"><button class="danger">Stop</button></form>{% endif %}
+<form method="post" action="/watches/{{ w.id }}/toggle"><button class="ghost">{{ 'Pause' if w.enabled else 'Resume' }}</button></form>
+<form method="post" action="/watches/{{ w.id }}/run"><button class="ghost">Run now</button></form>
+<form method="post" action="/watches/{{ w.id }}/delete" onsubmit="return confirm('Delete this auto rescan?{% if w.state == 'running' %} It is running and will be stopped.{% endif %}')"><button class="ghost" style="color:var(--danger)">Delete</button></form></div>
+<details style="margin:6px 0 0;padding:6px 10px"><summary>Edit</summary>
+<form method="post" action="/watches/{{ w.id }}/edit" class="stopmode">
+<div class="row"><label><input type="radio" class="mode" name="w_mode" value="count" {{ 'checked' if not w.until }}> up to <input data-for="count" name="max_posts" type="number" value="{{ w.max_posts }}" min="1" max="5000" style="width:80px"> new posts</label></div>
+<div class="row"><label><input type="radio" class="mode" name="w_mode" value="date" {{ 'checked' if w.until }}> back to <input data-for="date" name="w_until" value="{{ w.until }}" placeholder="e.g. 03/15/2024" style="width:140px"></label></div>
+<div class="row"><label>every <input name="interval_min" type="number" value="{{ w.interval_min }}" min="15" style="width:80px"> min</label><button>Save</button></div></form></details></td></tr>{% endfor %}</table>
+{% else %}<p class="note">No auto rescans yet. Fill in the form above and press <b>▶ Start auto rescan</b>.</p>{% endif %}
+{% if runs %}<h3>History</h3><p class="note">"New" is how many posts a run added. 0 new with "already" &gt; 0 means the site had nothing new. Deleting a run only removes this history line; imported posts are kept.</p>
+<form action="/scrape-runs/bulk-delete" method="post" onsubmit="return confirm('Delete the selected run(s) from history?')">
+<div class="row"><button class="danger">Delete selected</button></div>
+<table><tr><th><input type="checkbox" onclick="document.querySelectorAll('.pickrun').forEach(b=>b.checked=this.checked)"></th><th>Finished</th><th>Took</th><th>Type</th><th>URL</th><th>Keywords</th><th>Scanned</th><th>Matched</th><th>New</th><th>Already</th><th>Errors</th><th></th></tr>
+{% for r in runs %}<tr><td><input class="pickrun" type="checkbox" name="ids" value="{{ r.id }}"></td><td><time class="utc" data-utc="{{ r.finished or r.started }}">{{ r.finished or r.started }} UTC</time></td><td>{{ r.duration_s|duration }}</td><td>{{ 'auto' if r.kind == 'auto' else 'manual' }}</td><td style="word-break:break-all">{{ r.url }}</td><td>{{ r.keywords }}</td><td>{{ r.seen }}</td><td>{{ r.matched }}</td><td><b>{{ r.new }}</b></td><td>{{ r.already }}</td><td>{{ r.errors }}</td>
+<td><button type="submit" formaction="/scrape-runs/{{ r.id }}/delete" title="Delete this run" style="background:none;color:#c0392b;border:none" onclick="return confirm('Delete this run from history?')">✕</button></td></tr>{% endfor %}</table></form>{% else %}<h3>History</h3><p class="note">No scrape runs yet. Each run (manual or auto) is listed here when it finishes.</p>{% endif %}
+</div>

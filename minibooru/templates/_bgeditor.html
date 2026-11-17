@@ -1,0 +1,82 @@
+<dialog id="bged" style="width:min(820px,96vw)"><div class="in">
+  <h3>Set as background</h3>
+  <div class="row" style="margin:0 0 4px">
+    <label class="mut">Use for <select id="bged-slot"><option value="desktop">Desktop</option><option value="mobile">Phone</option></select></label>
+    <span class="mut" id="bged-hint"></span>
+  </div>
+  <div class="stage" id="bged-stage"><img id="bged-img" alt=""><div id="bged-crop" hidden>
+    <i data-h="nw"></i><i data-h="ne"></i><i data-h="sw"></i><i data-h="se"></i></div></div>
+  <div class="row">
+    <label class="mut"><input type="checkbox" id="bged-docrop"> Crop</label>
+    <label class="mut">Shape <select id="bged-ratio"><option value="desktop">Desktop screen</option><option value="phone">Phone screen</option><option value="free">Free</option><option value="1.7778">16:9</option><option value="1.3333">4:3</option><option value="1">Square</option></select></label>
+    <label class="mut">Resize to <select id="bged-max"><option value="1280">Small (1280px)</option><option value="1920" selected>Medium (1920px)</option><option value="2560">Large (2560px)</option></select></label>
+    <span class="mut" id="bged-out"></span>
+  </div>
+  <div class="row" style="justify-content:space-between">
+    <button type="button" class="ghost" id="bged-back" hidden>← Choose another</button><span></span>
+    <span class="row" style="margin:0"><button type="button" class="ghost" id="bged-cancel">Cancel</button><button type="button" id="bged-ok">Set as background</button></span>
+  </div>
+</div></dialog>
+<style>
+#bged .stage{position:relative;display:inline-block;max-width:100%;line-height:0;user-select:none;touch-action:none;margin:6px 0}
+#bged .stage img{max-width:100%;max-height:55vh;display:block;border-radius:6px}
+#bged-crop{position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px #0009;cursor:move;outline:1px solid #0008}
+#bged-crop i{position:absolute;width:16px;height:16px;background:#fff;border:1px solid #000;border-radius:3px}
+#bged-crop i[data-h=nw]{left:-8px;top:-8px;cursor:nwse-resize}#bged-crop i[data-h=ne]{right:-8px;top:-8px;cursor:nesw-resize}
+#bged-crop i[data-h=sw]{left:-8px;bottom:-8px;cursor:nesw-resize}#bged-crop i[data-h=se]{right:-8px;bottom:-8px;cursor:nwse-resize}
+@media (pointer:coarse){ #bged-crop i{width:28px;height:28px;border-radius:50%}#bged-crop i[data-h=nw]{left:-14px;top:-14px}#bged-crop i[data-h=ne]{right:-14px;top:-14px}
+#bged-crop i[data-h=sw]{left:-14px;bottom:-14px}#bged-crop i[data-h=se]{right:-14px;bottom:-14px}#bged .stage{margin:16px 14px}}
+#bged .stage img{-webkit-touch-callout:none;-webkit-user-drag:none;pointer-events:none}
+</style>
+<script>
+/* Shared background editor: crop to the right screen shape, resize, upload to the desktop or phone slot.
+   mbBgEditor.open(imageUrl, {slot, onDone(message), onBack}) — used by Customize and by a post's "Set as Background". */
+(function(){
+const $=id=>document.getElementById(id),dlg=$('bged'),img=$('bged-img'),crop=$('bged-crop'),doCrop=$('bged-docrop');
+const ratio=$('bged-ratio'),maxdim=$('bged-max'),slotSel=$('bged-slot');
+const MIN=24;let R={x:0,y:0,w:0,h:0},drag=null,opts={};
+const phoneNow=()=>mbIsPhone();
+const scr=()=>[Math.max(screen.width,screen.height),Math.min(screen.width,screen.height)];
+/* the real shape of this device's screen when it is that kind of device, else a typical one */
+function shape(kind){const[a,b]=scr();if(kind==='phone')return phoneNow()?b/a:9/19.5;return phoneNow()?16/9:a/b}
+/* when the picture is shown at a new size (phone toolbar hides, phone turns), the crop box keeps the same part of it */
+let lastW=0;new ResizeObserver(()=>{const W=img.clientWidth;if(!W)return;if(lastW&&W!==lastW&&R.w){const k=W/lastW;R={x:R.x*k,y:R.y*k,w:R.w*k,h:R.h*k};draw()}lastW=W}).observe(img);
+function r(){const v=ratio.value;return v==='free'?null:v==='desktop'?shape('desktop'):v==='phone'?shape('phone'):parseFloat(v)}
+function draw(){Object.assign(crop.style,{left:R.x+'px',top:R.y+'px',width:R.w+'px',height:R.h+'px'});out()}
+function out(){if(!img.clientWidth)return;const sx=img.naturalWidth/img.clientWidth;let w=doCrop.checked?R.w*sx:img.naturalWidth,h=doCrop.checked?R.h*sx:img.naturalHeight;
+const s=Math.min(1,parseInt(maxdim.value)/Math.max(w,h));$('bged-out').textContent='→ '+Math.round(w*s)+'×'+Math.round(h*s)+' px'}
+function reset(){const W=img.clientWidth,H=img.clientHeight,q=r();lastW=W;R={x:0,y:0,w:W,h:H};
+if(q){if(W/H>q){R.w=H*q;R.x=(W-R.w)/2}else{R.h=W/q;R.y=(H-R.h)/2}}draw()}
+/* picking Desktop or Phone switches the crop to that screen shape, so a phone background is cut tall even on a desktop */
+function forSlot(){const phone=slotSel.value==='mobile';ratio.value=phone?'phone':'desktop';doCrop.checked=true;
+crop.hidden=false;ratio.disabled=false;$('bged-hint').textContent=phone?'Cropped to a phone screen; drag the box to choose the part to keep.':'Cropped to a desktop screen; drag the box to choose the part to keep.';
+if(img.naturalWidth)reset()}
+slotSel.onchange=forSlot;
+doCrop.onchange=()=>{crop.hidden=!doCrop.checked;ratio.disabled=!doCrop.checked;if(doCrop.checked)reset();out()};
+ratio.onchange=reset;maxdim.onchange=out;
+const stage=$('bged-stage');stage.addEventListener('pointerdown',e=>{if(crop.hidden)return;e.preventDefault();stage.setPointerCapture(e.pointerId);
+const b=img.getBoundingClientRect();drag={h:e.target.dataset.h,px:e.clientX,py:e.clientY,R:{...R},bx:b.left,by:b.top}});
+stage.addEventListener('pointermove',e=>{if(!drag)return;const W=img.clientWidth,H=img.clientHeight,o=drag.R;
+if(!drag.h){R.x=Math.min(Math.max(0,o.x+e.clientX-drag.px),W-o.w);R.y=Math.min(Math.max(0,o.y+e.clientY-drag.py),H-o.h);draw();return}
+const ax=drag.h.includes('w')?o.x+o.w:o.x,ay=drag.h.includes('n')?o.y+o.h:o.y;
+const px=Math.min(Math.max(0,e.clientX-drag.bx),W),py=Math.min(Math.max(0,e.clientY-drag.by),H);
+const east=px>=ax,south=py>=ay;let w=Math.abs(px-ax),h=Math.abs(py-ay);const q=r();
+if(q){w=Math.min(w,east?W-ax:ax);h=Math.min(h,south?H-ay:ay);if(w/h>q)w=h*q;else h=w/q}
+w=Math.max(w,MIN);h=Math.max(h,MIN);R={x:east?ax:ax-w,y:south?ay:ay-h,w,h};
+R.x=Math.max(0,Math.min(R.x,W-R.w));R.y=Math.max(0,Math.min(R.y,H-R.h));draw()});
+['pointerup','pointercancel'].forEach(t=>stage.addEventListener(t,()=>{drag=null}));
+function close(){dlg.close();if(opts.revoke)URL.revokeObjectURL(img.src)}
+$('bged-cancel').onclick=close;dlg.addEventListener('click',e=>{if(e.target===dlg)close()});
+$('bged-back').onclick=()=>{dlg.close();if(opts.onBack)opts.onBack()};
+$('bged-ok').onclick=()=>{const sx=img.naturalWidth/img.clientWidth;let sxp=0,syp=0,sw=img.naturalWidth,sh=img.naturalHeight;
+if(doCrop.checked){sxp=R.x*sx;syp=R.y*sx;sw=R.w*sx;sh=R.h*sx}
+const s=Math.min(1,parseInt(maxdim.value)/Math.max(sw,sh)),cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(sw*s));cv.height=Math.max(1,Math.round(sh*s));
+cv.getContext('2d').drawImage(img,sxp,syp,sw,sh,0,0,cv.width,cv.height);
+const slot=slotSel.value,name=slot==='mobile'?'Phone':'Desktop',done=opts.onDone||(()=>{});
+close();done('Saving…');
+cv.toBlob(async blob=>{try{await mbUploadBg(slot,blob);done(name+' background set for all your devices.')}
+catch(e){done('Could not save the background: '+e.message)}},'image/jpeg',0.88)};
+window.mbBgEditor={open(src,o){opts=o||{};slotSel.value=opts.slot||(phoneNow()?'mobile':'desktop');
+$('bged-back').hidden=!opts.onBack;img.onload=()=>forSlot();img.src=src;dlg.showModal();if(img.complete&&img.naturalWidth)forSlot()}};
+})();
+</script>

@@ -1,0 +1,7 @@
+<form class="row" method="get" action="{{ sort_action }}" style="margin:0 0 8px">
+{% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+<label class="mut">Filter by <select name="view" onchange="this.form.submit()">{% for k, label in views.items() %}<option value="{{ k }}" {{ 'selected' if view == k }}>{{ label }}</option>{% endfor %}</select></label>
+{% if sources %}<label class="mut">Show <select name="src" onchange="this.form.submit()">{% for k, label in sources.items() %}<option value="{{ k }}" {{ 'selected' if src == k }}>{{ label }}</option>{% endfor %}</select></label>{% endif %}
+<label class="mut">Sort <select name="sort" onchange="this.form.submit()"><option value="new" {{ 'selected' if sort == 'new' }}>Newest first</option><option value="old" {{ 'selected' if sort == 'old' }}>Oldest first</option></select></label>
+<noscript><button>Apply</button></noscript>
+<span class="mut">(sorted by upload time on the original site; import time if the site gave none)</span></form>

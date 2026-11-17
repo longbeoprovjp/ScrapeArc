@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% block title %}Welcome · {{ brand.name }}{% endblock %}{% block body %}
+<div style="max-width:480px;margin:6vh auto 0">
+<h2>Welcome! Let's set things up</h2>
+<p class="mut">Pick a name for this archive and, if you like, an icon and the kinds of tags you'll use. The name and icon show in the header and the browser tab; change them any time under 🎨 Customize.</p>
+<form method="post" action="/setup" enctype="multipart/form-data" class="panel" style="background:var(--card);padding:16px;border-radius:var(--radius);box-shadow:var(--shadow)">
+<input type="hidden" name="next" value="{{ next }}">
+<label class="mut" for="nm">Name</label>
+<div class="row"><input id="nm" name="name" value="{{ default_name }}" maxlength="40" required style="flex:1"></div>
+<label class="mut" for="ic">Icon (optional; a square picture works best)</label>
+<div class="row" style="align-items:center"><img src="/brand/icon-128.png?v={{ brand.icon_v }}" alt="" style="width:48px;height:48px;border-radius:12px"><input id="ic" type="file" name="icon" accept="image/*"></div>
+<label class="mut" for="ty">Tag types (optional, comma separated). They group your tags and give them colours, e.g. <i>person, artist, place</i>. Every tag without a type is <b>other</b>. You can change them later on the Tags page.</label>
+<div class="row"><input id="ty" name="types" maxlength="300" placeholder="e.g. person, artist" style="flex:1"></div>
+<div class="row"><button>Save and continue</button></div>
+</form></div>
+{% endblock %}

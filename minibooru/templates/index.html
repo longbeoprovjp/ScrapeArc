@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block body %}
+<details {% if not posts and not q %}open{% endif %}><summary>Upload</summary>
+<form class="row" action="/upload" method="post" enctype="multipart/form-data">
+<input type="file" name="files" multiple required accept="image/*,video/*"><input name="tags" placeholder="tags, space separated"><input name="title" placeholder="title (optional)"><label class="mut"><input type="checkbox" name="together" value="1"> as one post</label><button>Upload</button></form></details>
+<p class="mut">{{ total }} post{{ '' if total == 1 else 's' }}</p>
+{% set sort_action = '/' %}{% include "_sort.html" %}
+{% include "_grid.html" %}
+{% include "_pager.html" %}
+{% endblock %}

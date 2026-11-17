@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block title %}Tag {{ t.name }} · {{ brand.name }}{% endblock %}{% block body %}
+<h2 style="color:{{ t.color }}">{{ t.name }} <span class="mut" style="font-size:14px">{{ t.category }} · {{ total }} post{{ '' if total == 1 else 's' }}</span></h2>
+<p class="mut">{% if aliases %}Aliases: {{ aliases|join(', ') }}. {% endif %}{% if implies %}Implies: {% for i in implies %}<a href="/tag/{{ i|urlencode }}">{{ i }}</a> {% endfor %}{% endif %}</p>
+<details><summary>Edit this tag</summary>
+<form class="row" action="/tags/category" method="post"><input type="hidden" name="name" value="{{ t.name }}"><select name="category">{% for c in cats %}<option value="{{ c }}" {{ 'selected' if c == t.category }}>{{ c }}</option>{% endfor %}</select><button>Change type</button></form>
+<form class="row" action="/tag/{{ t.name|urlencode }}/delete" method="post" onsubmit="return confirm('Delete tag {{ t.name }}? Posts are kept.')">
+<label><input type="checkbox" name="block" value="1"> also block it from future imports</label><button class="danger">Delete tag</button></form></details>
+{% set sort_action = '/tag/' ~ (t.name|urlencode) %}{% set q = '' %}{% include "_sort.html" %}
+{% include "_grid.html" %}
+{% include "_pager.html" %}
+{% endblock %}

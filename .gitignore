@@ -1,0 +1,44 @@
+# secrets and logins (keep only the .example templates)
+.env*
+!.env*.example
+cookies*.txt
+*.cookies
+gallery-dl.conf
+
+# keys and disk-encryption backups (README section 3a)
+*.key
+*-header.img
+minibooru-keys/
+
+# your data: posts, database, archives
+data/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.db
+
+# personal notes and local AI-assistant settings
+NEXT_STEPS.md
+CLAUDE.md
+.claude/
+
+# local overrides
+docker-compose.override.yml
+server/
+
+# Python / tooling
+__pycache__/
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+*.log
+
+# editors and OS
+.vscode/
+.idea/
+.DS_Store

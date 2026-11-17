@@ -1,0 +1,99 @@
+{% extends "base.html" %}{% block title %}Customize screen · {{ brand.name }}{% endblock %}{% block body %}
+<style>
+.cs{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:24px;align-items:start}
+@media(max-width:900px){.cs{grid-template-columns:1fr}.cs-preview{position:static!important}}
+.cs-sec{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 16px;margin:0 0 14px}
+.cs-sec>h3{margin:2px 0 8px;font-size:16px}
+.setups{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.setup{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:8px 10px;background:transparent;color:var(--fg);border:1px solid var(--line);font-weight:500}
+.setup:hover{border-color:var(--acc);filter:none}
+.setup .sw{display:flex;gap:3px}.setup .sw i{width:18px;height:18px;border-radius:5px;box-shadow:0 0 0 1px #8885}
+.setup b{font-size:13.5px}.setup small{color:var(--mut);font-size:12px;line-height:1.3}
+.cs-row{display:flex;align-items:center;gap:8px;margin:6px 0}.cs-row>span:first-child{flex:1}
+.cs-row .ok,.cs-row .bad{font-size:11.5px;padding:1px 7px;border-radius:999px;white-space:nowrap}
+.cs-row .ok{color:var(--mut)}.cs-row .bad{background:#e5a00022;color:#e5a000;font-weight:600}
+.cs-row button{padding:3px 9px}
+.cgroup.flash{animation:flash 1.2s}@keyframes flash{0%,40%{color:var(--acc)}}
+.cs-preview{position:sticky;top:80px}
+.pv{border-radius:var(--radius);overflow:hidden;box-shadow:var(--lift);background:linear-gradient(color-mix(in srgb,var(--bg) calc(var(--dim) * 100%),transparent),color-mix(in srgb,var(--bg) calc(var(--dim) * 100%),transparent)),var(--bgimg) center/cover,var(--bg);color:var(--fg)}
+.pv [data-g]{cursor:pointer;outline-offset:2px}.pv [data-g]:hover{outline:2px dashed var(--acc)}
+.pv-head{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--head);color:var(--headfg);flex-wrap:wrap}
+.pv-head b{font-size:16px}.pv-head input{flex:1;min-width:120px;border-radius:999px;padding:6px 14px}
+.pv-head span{font-size:13.5px;color:var(--headfg)}
+.pv-body{padding:14px;display:flex;flex-direction:column;gap:12px}
+.pv .grid{gap:10px;grid-template-columns:repeat(3,minmax(0,1fr))!important}
+.pv .grid .cell>a{pointer-events:none}
+.pv-ph{display:block;width:100%;height:100%;background:linear-gradient(135deg,var(--acc),var(--btn))}
+</style>
+<h2>Customize screen</h2>
+<p class="note">Changes apply instantly and are saved in this browser. The preview on the right shows the pieces of the app; <b>click any box in it</b> to jump to its colours. Each colour shows how readable its text is (aim for 4.5:1, or 3:1 for borders).</p>
+<div class="cs">
+<div class="cs-controls">
+  <section class="cs-sec"><h3>Ready-made setups</h3>
+    <p class="mut" style="margin:0 0 8px;font-size:13px">Every setup passes the readability check. Load one, then change anything you like.</p>
+    <div class="setups" id="setups"></div></section>
+  <section class="cs-sec"><h3>Colours</h3><div id="cs-colors"></div></section>
+  <section class="cs-sec"><h3>Layout</h3>
+    <div class="cs-row"><span>Fade the background picture</span><input type="range" id="l-dim" min="0" max="0.8" step="0.05"><button class="ghost" type="button" data-reset="dim" title="Back to default">↺</button></div>
+    <div class="cs-row"><span>Corner roundness</span><input type="range" id="l-radius" min="0" max="24" step="1"><button class="ghost" type="button" data-reset="radius" title="Back to default">↺</button></div>
+    <div class="cs-row"><span>Thumbnail size (when Per row is Auto)</span><input type="range" id="l-thumb" min="110" max="320" step="10"><button class="ghost" type="button" data-reset="thumb" title="Back to default">↺</button></div>
+    <div class="cs-row"><span>Outline around posts</span><input type="checkbox" id="l-pout"><input type="color" id="l-poutc" title="Outline colour"><select id="l-poutw" title="Thickness"><option value="1px">Thin</option><option value="2px">Medium</option><option value="4px">Thick</option></select></div>
+  </section>
+  <div class="row" style="justify-content:space-between"><button class="ghost danger" type="button" id="cs-reset">Reset everything</button><a href="/"><button type="button">Done</button></a></div>
+</div>
+<div class="cs-preview"><div class="pv">
+  <div class="pv-head" data-g="Header"><b>{{ brand.name }}</b><input placeholder="Search tags…" data-g="Input boxes (text fields, dropdowns)"><span>Scrape</span><span>Tags</span></div>
+  <div class="pv-body">
+    <div data-g="Page"><b>Page text</b> <span class="mut">and faint text like “48 posts”</span> · <a href="#" onclick="return false" data-g="Links & dates">a link</a></div>
+    <div class="note postmeta" data-g="Info boxes">Info box text · <span class="d-posted" data-g="Links & dates">Posted 2026-11-15</span> · <span class="d-saved" data-g="Links & dates">Saved 2026-11-16</span></div>
+    <div class="cs-sec" style="margin:0" data-g="Cards, panels & popups"><b>A card or panel</b>
+      <div class="row"><input value="An input box" data-g="Input boxes (text fields, dropdowns)" style="flex:1"><select data-g="Input boxes (text fields, dropdowns)"><option>A dropdown</option></select></div>
+      <div class="row"><button type="button" data-g="Main buttons">Main button</button><button type="button" class="ghost" data-g="Other buttons">Other button</button><button type="button" class="danger" data-g="Other buttons">Delete</button></div></div>
+    <div class="grid">{% for p in sample %}<div class="cell"><a><img src="/thumbs/{{ p.sha256 }}.jpg" alt="" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'pv-ph'}))"></a></div>{% else %}{% for i in range(3) %}<div class="cell"><a><i class="pv-ph"></i></a></div>{% endfor %}{% endfor %}</div>
+  </div></div>
+  <p class="mut" style="font-size:13px">The posts above use your outline and corner settings. The real header at the top of this page changes too.</p>
+</div>
+</div>
+<script>
+addEventListener('DOMContentLoaded',function(){   /* runs after the shared colour engine (end of the page) is set up */
+const T=mbTheme,C=T.cfg,$=id=>document.getElementById(id);
+/* setups: a swatch strip, name and description; "Default" drops every colour you set */
+const box=$('setups');
+const card=(name,desc,colors,dim)=>{const b=document.createElement('button');b.type='button';b.className='setup';
+ const sw=colors?['bg','card','head','btn','acc'].map(k=>'<i style="background:'+colors[k]+'"></i>').join(''):'<i style="background:linear-gradient(135deg,#888,#ccc)"></i>';
+ b.innerHTML='<span class="sw">'+sw+'</span><b></b><small></small>';b.querySelector('b').textContent=name;b.querySelector('small').textContent=desc;
+ b.onclick=()=>{if(colors)T.load(colors,dim);else{for(const k of C.roles)T.set(k,null)}buildColors();syncLayout()};box.appendChild(b)};
+card('Default','The colours this app came with',null);
+for(const s of C.setups)card(s.name,s.desc,s.colors,s.dim);
+/* colours by box, with a readability badge on each text/border colour */
+function badge(k,el){const r=T.check(k);if(!r){el.textContent='';el.className='';return}
+ const v=(Math.floor(r.r*10)/10).toFixed(1)+':1';el.className=r.r>=r.need?'ok':'bad';el.textContent=r.r>=r.need?'✓ '+v:'⚠ '+v+' (aim '+r.need+')';
+ el.title=r.r>=r.need?'Readable on its box':'Hard to read on its box'}
+function buildColors(){const host=$('cs-colors');host.innerHTML='';
+ for(const[title,fields]of C.groups){const h=document.createElement('div');h.className='cgroup';h.textContent=title;h.dataset.group=title;host.appendChild(h);
+  for(const[k,label]of fields){const r=document.createElement('div');r.className='cs-row';
+   r.innerHTML='<span></span><em></em><input type="color"><button class="ghost" type="button" title="Back to default">↺</button>';
+   r.querySelector('span').textContent=label;const inp=r.querySelector('input'),b=r.querySelector('em');b.style.fontStyle='normal';
+   const v=T.raw(k);inp.value=T.get(k)||(T.hex6(v)?v:'#888888');
+   inp.oninput=()=>{T.set(k,inp.value);host.querySelectorAll('em[data-k]').forEach(e=>badge(e.dataset.k,e))};
+   r.querySelector('button').onclick=()=>{T.set(k,null);buildColors()};
+   if(C.pairs[k]){b.dataset.k=k;badge(k,b)}host.appendChild(r)}}}
+/* layout */
+const num=(k,d)=>{const v=T.get(k);return v!==undefined?v:(parseFloat(T.raw(k))||d)};
+function syncLayout(){$('l-dim').value=num('dim',0);$('l-radius').value=num('radius',12);$('l-thumb').value=num('thumb',180);
+ $('l-pout').checked=!!T.get('pout');$('l-poutc').value=T.get('pout')||(T.hex6(T.raw('acc'))?T.raw('acc'):'#5a67f2');$('l-poutw').value=T.get('poutw')||'2px';
+ $('l-poutc').disabled=$('l-poutw').disabled=!T.get('pout')}
+for(const k of ['dim','radius','thumb'])$('l-'+k).oninput=e=>T.set(k,e.target.value);
+document.querySelectorAll('[data-reset]').forEach(b=>b.onclick=()=>{T.set(b.dataset.reset,null);syncLayout()});
+const outline=()=>{if($('l-pout').checked){T.set('pout',$('l-poutc').value);T.set('poutw',$('l-poutw').value)}else{T.set('pout',null);T.set('poutw',null)}syncLayout()};
+$('l-pout').onchange=outline;$('l-poutc').oninput=outline;$('l-poutw').onchange=outline;
+$('cs-reset').onclick=()=>{if(confirm('Reset all colours and layout settings (including posts per row)?')){T.reset();buildColors();syncLayout()}};
+/* click a box in the preview: jump to its colours */
+document.querySelectorAll('.pv [data-g]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();e.preventDefault();
+ const h=document.querySelector('.cgroup[data-group="'+CSS.escape(el.dataset.g)+'"]');if(!h)return;
+ h.scrollIntoView({behavior:'smooth',block:'start'});h.classList.remove('flash');void h.offsetWidth;h.classList.add('flash');
+ const first=h.nextElementSibling&&h.nextElementSibling.querySelector('input[type=color]');if(first)setTimeout(()=>first.focus(),400)}));
+buildColors();syncLayout();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,3 @@
+<div class="pager">{% if prev_url %}<a href="{{ prev_url }}">← Prev</a>{% endif %}<span class="mut">Page {{ page }} / {{ pages }}</span>{% if next_url %}<a href="{{ next_url }}">Next →</a>{% endif %}
+{% if pages > 1 %}<form class="jump" method="get" action="{{ jump_action }}">{% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}{% if sort != 'new' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}{% if view != 'all' %}<input type="hidden" name="view" value="{{ view }}">{% endif %}{% if src and src != 'all' %}<input type="hidden" name="src" value="{{ src }}">{% endif %}
+<input type="number" name="page" min="1" max="{{ pages }}" placeholder="Page" aria-label="Page number" required><button class="ghost">Go</button></form>{% endif %}</div>

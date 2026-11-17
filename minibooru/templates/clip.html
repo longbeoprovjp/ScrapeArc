@@ -1,0 +1,89 @@
+{% extends "base.html" %}{% block title %}Save post · {{ brand.name }}{% endblock %}{% block body %}
+<style>
+.clipgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin:10px 0}
+.clipfile{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--card);box-shadow:var(--shadow);display:grid;place-items:center;font-size:12px;color:var(--mut);text-align:center;padding:4px}
+.clipfile img,.clipfile video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.clipfile.off{opacity:.25}
+.clipfile button{position:absolute;top:6px;right:6px;padding:2px 8px;font-size:12px;z-index:2}
+.clipfile .badge{left:6px;right:auto;top:auto;bottom:6px}
+.cliptags .chip button{background:none;border:0;padding:0 0 0 4px;color:inherit;font-weight:700;cursor:pointer}
+#clipstatus{min-height:1.4em}
+</style>
+<h2>Save this post</h2>
+<p class="mut" id="clipstatus">Waiting for the page… (open this window with the “Save to {{ brand.name }}” bookmark while you look at a post)</p>
+<div id="clipform" hidden>
+  <div class="panel" style="background:var(--card);padding:12px 14px;border-radius:var(--radius);box-shadow:var(--shadow)">
+    <label class="mut" for="ctitle">Title</label>
+    <div class="row" style="margin-top:4px"><input id="ctitle" maxlength="300" style="flex:1"></div>
+    <div class="mut" id="cmeta"></div>
+    <h3 style="margin:12px 0 6px">Tags</h3>
+    <div class="chips cliptags" id="ctags"></div>
+    <div class="row"><input id="newtag" placeholder="add a tag" style="width:180px">
+      <select id="newtype">{% for t, col in types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}</select>
+      <button type="button" class="ghost" id="addtag">Add</button></div>
+  </div>
+  <h3 style="margin:14px 0 0">Files <span class="mut" id="ccount"></span></h3>
+  <p class="mut" style="margin:2px 0 0">Click ✕ to leave a file out. Files your browser could not fetch are downloaded by the server instead (marked “server”).</p>
+  <div class="clipgrid" id="cfiles"></div>
+  <div class="row"><button type="button" id="csave" disabled>Save</button><button type="button" class="ghost" onclick="window.close()">Close</button></div>
+</div>
+<script>
+(function(){
+const $=id=>document.getElementById(id),opener=window.opener,status=t=>{$('clipstatus').textContent=t};
+const COLORS={{ dict(types)|tojson }};COLORS.other='var(--mut)';
+let page=null,origin=null,data=null,tags=[],files=[],done=false;
+if(!opener){status('Open this window with the “Save to {{ brand.name }}” bookmark while you look at a post. Get the bookmark from the Scrape page.');return}
+function drawTags(){const box=$('ctags');box.innerHTML='';
+ tags.forEach((t,i)=>{const s=document.createElement('span');s.className='chip';s.style.setProperty('--c',COLORS[t.type]||'');
+  s.title=t.type;s.textContent=t.name;const x=document.createElement('button');x.type='button';x.textContent='✕';x.title='Remove';
+  x.onclick=()=>{tags.splice(i,1);drawTags()};s.appendChild(x);box.appendChild(s)});
+ if(!tags.length)box.innerHTML='<span class="mut">No tags found; add some below.</span>'}
+function drawFiles(){const box=$('cfiles');box.innerHTML='';let n=0;
+ files.forEach((f,i)=>{const d=document.createElement('div');d.className='clipfile'+(f.skip?' off':'');
+  if(f.blob){const isVid=f.blob.type.startsWith('video/');const el=document.createElement(isVid?'video':'img');el.src=f.view||(f.view=URL.createObjectURL(f.blob));if(isVid){el.muted=true}d.appendChild(el)}
+  else if(f.failed){d.textContent='Your browser could not fetch this file: the server will download it.';const b=document.createElement('span');b.className='badge';b.textContent='server';d.appendChild(b)}
+  else d.textContent='loading…';
+  const x=document.createElement('button');x.type='button';x.className=f.skip?'':'danger';x.textContent=f.skip?'↺':'✕';x.title=f.skip?'Put it back':'Leave this file out';
+  x.onclick=()=>{f.skip=!f.skip;drawFiles()};d.appendChild(x);box.appendChild(d);if(!f.skip)n++});
+ $('ccount').textContent='('+n+' of '+files.length+' will be saved)';$('csave').disabled=!done||!n}
+$('addtag').onclick=()=>{const name=$('newtag').value.trim().toLowerCase().replace(/\s+/g,'_');if(!name)return;
+ if(!tags.some(t=>t.name===name))tags.push({name,type:$('newtype').value});$('newtag').value='';drawTags()};
+$('newtag').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('addtag').click()}});
+window.addEventListener('message',async e=>{
+ if(e.source!==opener)return;                    /* only the page that opened this window */
+ const m=e.data||{};
+ if(m.type==='page'&&typeof m.html==='string'&&typeof m.url==='string'){
+  origin=e.origin;page=m;status('Reading the page…');
+  try{const r=await fetch('/clip/parse',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({url:m.url,html:m.html})});
+   if(!r.ok)throw new Error((await r.text()).replace(/<[^>]+>/g,' ').trim().slice(0,200));data=await r.json()}
+  catch(err){status('Could not read this page: '+err.message);return}
+  if(!data.media.length){status('No pictures or videos found on this page.');return}
+  $('ctitle').value=data.title||'';tags=data.tags.slice();
+  $('cmeta').textContent=(data.posted?'Posted '+data.posted+' UTC · ':'No upload date found · ')+data.media.length+' file(s) found';
+  files=data.media.map(u=>({url:u}));$('clipform').hidden=false;drawTags();drawFiles();
+  status(data.already?'Note: this post is already saved (post #'+data.already+'). Saving again adds nothing new.':'Fetching the files in your browser…');
+  opener.postMessage({type:'fetch',urls:data.media},origin);
+ }
+ if(m.type==='file'&&files[m.i]&&m.buf instanceof ArrayBuffer){files[m.i].blob=new Blob([m.buf],{type:m.mime||''});drawFiles()}
+ if(m.type==='file-failed'&&files[m.i]){files[m.i].failed=true;drawFiles()}
+ if(m.type==='done'){done=true;drawFiles();if(!data.already)status('Check the files and tags, then press Save.')}
+});
+/* tell the site's page (where the bookmark was clicked) how it went: it shows a small bubble */
+const tell=(state,text)=>{try{if(opener&&!opener.closed)opener.postMessage({type:'status',state,text},origin)}catch(_){}};
+$('csave').onclick=async()=>{$('csave').disabled=true;status('Saving…');tell('saving','Saving…');
+ const fd=new FormData(),keep=files.filter(f=>!f.skip);
+ const ext=t=>({'image/jpeg':'.jpg','image/png':'.png','image/gif':'.gif','image/webp':'.webp','video/mp4':'.mp4','video/webm':'.webm','video/quicktime':'.mov'})[(t||'').split(';')[0]]||'';
+ keep.forEach((f,i)=>{if(f.blob){const name=(f.url.split('?')[0].split('/').pop()||'file')+'';fd.append('files',f.blob,/\.[a-z0-9]{2,5}$/i.test(name)?name:'file'+i+ext(f.blob.type))}});
+ fd.append('meta',JSON.stringify({url:page.url,title:$('ctitle').value,posted:data.posted,tags,missing:keep.filter(f=>!f.blob).map(f=>f.url)}));
+ try{const r=await fetch('/clip/save',{method:'POST',body:fd,credentials:'same-origin'});
+  if(!r.ok)throw new Error((await r.text()).replace(/<[^>]+>/g,' ').trim().slice(0,200));const res=await r.json();
+  $('clipstatus').innerHTML='';const a=document.createElement('a');a.href='/post/'+res.post_id;a.target='_blank';
+  a.textContent=(res.status==='new'?'Saved':'Already had it')+': post #'+res.post_id+' ('+res.files+' file'+(res.files===1?'':'s')+')';
+  $('clipstatus').appendChild(a);if(res.notes.length)$('clipstatus').append(' · '+res.notes.join(' · '));
+  tell('saved',(res.status==='new'?'Saved ✓':'Already saved ✓')+' post #'+res.post_id);
+  setTimeout(()=>window.close(),150)}   /* done: close this window (the bubble on the page confirms it) */
+ catch(err){status('Could not save: '+err.message);$('csave').disabled=false;tell('error','Could not save: see the window')}};
+opener.postMessage({type:'ready'},'*');   /* carries no data: just "I am loaded, send the page" */
+})();
+</script>
+{% endblock %}

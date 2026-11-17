@@ -1,0 +1,64 @@
+{% extends "base.html" %}{% block title %}Post {{ p.id }} · {{ brand.name }}{% endblock %}{% block body %}
+{% set images = files|selectattr('is_image')|list %}
+<nav class="postnav">{% if prev_url %}<a href="{{ prev_url }}" id="nav-prev" title="Previous post (← key)">← Prev</a>{% else %}<span class="off">← Prev</span>{% endif %}
+<span class="mut">← → keys also work</span>
+{% if next_url %}<a href="{{ next_url }}" id="nav-next" title="Next post (→ key)">Next →</a>{% else %}<span class="off">Next →</span>{% endif %}</nav>
+<script>
+document.addEventListener('keydown',e=>{
+  if(e.altKey||e.ctrlKey||e.metaKey||e.shiftKey||document.querySelector('dialog[open]'))return;
+  if(e.target.closest('input,textarea,select,video,[contenteditable]'))return;
+  const a=document.getElementById(e.key==='ArrowLeft'?'nav-prev':e.key==='ArrowRight'?'nav-next':'');
+  if(a){e.preventDefault();location.href=a.href}});
+</script>
+<div class="post"><div class="post-media">{% for f in files %}<div class="mwrap">{% if f.mime.startswith('video/') %}<video class="media" src="{{ f.url }}" controls></video>{% else %}<img class="media" src="{{ f.url }}" alt="{{ p.title }}">{% endif %}
+{% if files|length > 1 %}<form class="fdel" action="/post/{{ p.id }}/file/{{ f.sha }}/delete" method="post" onsubmit="return confirm('Delete {{ 'this video' if f.mime.startswith('video/') else 'this picture' }} ({{ loop.index }} of {{ files|length }}) from the post? Scrapes will not download it again.')"><button class="danger" title="Delete only this file from the post">✕ Delete {{ loop.index }}/{{ files|length }}</button></form>{% endif %}</div>{% endfor %}</div>
+<style>.mwrap{position:relative}.fdel{position:absolute;top:10px;right:10px;margin:0;opacity:.0;transition:opacity .15s}
+.mwrap:hover .fdel,.fdel:focus-within{opacity:1}@media (hover:none){.fdel{opacity:.85}}.fdel button{padding:4px 10px;font-size:12.5px;box-shadow:0 2px 8px #0006}</style>
+<div class="post-side">
+{% if dups %}<div class="dupbox"><b>⚠ Possible duplicate{{ 's' if dups|length > 1 }}</b> <span class="mut">looks like the same content as:</span>
+{% for o in dups %}<div class="dup"><a href="/post/{{ o.id }}"><img src="/thumbs/{{ o.sha256 }}.jpg" alt="" onerror="this.style.display='none'"></a>
+<div><a href="/post/{{ o.id }}">#{{ o.id }} {{ o.title or 'Untitled' }}</a><div class="mut">{{ o.width }}×{{ o.height }} (this one: {{ p.width }}×{{ p.height }}) · {{ o.source }}</div>
+<div class="row" style="margin:6px 0 0">
+<form action="/post/{{ p.id }}/dup/{{ o.id }}/dismiss" method="post"><button class="ghost">Keep both</button></form>
+<form action="/post/{{ p.id }}/dup/{{ o.id }}/merge" method="post" onsubmit="return confirm('Move this post\'s tags to #{{ o.id }} and delete this post?')"><button class="ghost">Merge into #{{ o.id }}</button></form>
+<form action="/post/{{ o.id }}/delete" method="post" onsubmit="return confirm('Delete #{{ o.id }}?')"><input type="hidden" name="next" value="/post/{{ p.id }}"><button class="danger">Delete #{{ o.id }}</button></form>
+</div></div></div>{% endfor %}</div>
+<style>.dupbox{background:var(--card);border:1px solid #c77d00;border-radius:var(--radius);padding:10px 14px;margin:0 0 12px}
+.dup{display:flex;gap:12px;align-items:flex-start;margin-top:10px}.dup img{width:84px;height:84px;object-fit:cover;border-radius:8px;display:block}</style>{% endif %}
+<h2>{{ p.title or 'Untitled' }}</h2>
+<div class="note postmeta">{{ p.width }}×{{ p.height }}{% if files|length > 1 %} · {{ files|length }} files{% endif %}<br>
+{% if p.posted %}Uploaded <span class="d-posted">{{ p.posted }} UTC</span><br>{% endif %}Saved here <span class="d-saved">{{ p.created }} UTC</span><br>
+<span style="word-break:break-all">Source: {% if p.source.startswith(('http://', 'https://')) %}<a href="{{ p.source }}" target="_blank" rel="noopener noreferrer">{{ p.source }}</a>{% else %}{{ p.source }}{% endif %}</span></div>
+<div class="panel"><h3>Tags</h3><div class="chips" style="margin:0">{% for t in tags %}<a class="chip big" style="--c:{{ t.color }}" href="/tag/{{ t.name|urlencode }}">{{ t.name }}</a>{% else %}<span class="mut">No tags yet</span>{% endfor %}</div></div>
+<div class="row">
+<form action="/post/{{ p.id }}/favorite" method="post"><button class="{{ '' if p.favorite else 'ghost' }}">{{ '★ Favorited' if p.favorite else '☆ Favorite' }}</button></form>
+{% if images %}<button type="button" class="ghost" id="set-bg">Set as Background</button><span class="mut" id="bg-msg"></span>{% endif %}
+</div>
+<form class="panel" action="/post/{{ p.id }}/tags" method="post"><h3>Edit</h3><input name="title" value="{{ p.title }}" style="width:100%;margin-bottom:8px">
+<textarea name="tags" rows="3">{{ tags|map(attribute='name')|join(' ') }}</textarea><div class="row"><button>Save tags</button></div></form>
+<form action="/post/{{ p.id }}/delete" method="post" onsubmit="return confirm('Delete this post?')"><button class="danger ghost" style="width:100%">Delete post</button></form>
+</div></div>
+
+{% if images %}
+<dialog id="bgdlg" style="width:min(820px,96vw)"><div class="in">
+  <h3>Which picture should be the background?</h3>
+  <div class="pickgrid">{% for f in images %}<button type="button" class="pickimg" data-url="{{ f.url }}"><img src="{{ f.thumb }}" alt=""></button>{% endfor %}</div>
+  <div class="row" style="justify-content:flex-end"><button type="button" class="ghost" data-close>Cancel</button></div>
+</div></dialog>
+<style>
+.pickgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin:10px 0}
+.pickimg{padding:0;border:2px solid transparent;border-radius:8px;overflow:hidden;aspect-ratio:1;background:var(--card)}
+.pickimg img{width:100%;height:100%;object-fit:cover;display:block}.pickimg:hover{border-color:var(--acc)}
+</style>
+<script>
+(function(){
+const dlg=document.getElementById('bgdlg'),msg=document.getElementById('bg-msg'),picks=[...document.querySelectorAll('.pickimg')];
+const edit=u=>mbBgEditor.open(u,{onDone:t=>{msg.textContent=t},onBack:picks.length>1?()=>dlg.showModal():null});
+document.getElementById('set-bg').onclick=()=>{if(picks.length>1)dlg.showModal();else edit(picks[0].dataset.url)};
+picks.forEach(b=>b.onclick=()=>{dlg.close();edit(b.dataset.url)});
+dlg.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>dlg.close());
+dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close()});
+})();
+</script>
+{% endif %}
+{% endblock %}

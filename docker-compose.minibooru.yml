@@ -1,0 +1,16 @@
+name: minibooru
+# Mini Booru service.   docker compose -f docker-compose.minibooru.yml --env-file .env.minibooru up -d --build
+services:
+  minibooru:
+    build: .
+    image: minibooru:latest
+    container_name: minibooru
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1000}"
+    env_file: .env.minibooru              # MINIBOORU_PASSWORD, MINIBOORU_SLEEP, ...
+    environment:
+      TZ: ${TZ:-UTC}
+    ports:
+      - "${BIND_ADDR:-0.0.0.0}:${MINIBOORU_PORT:-8090}:8090"
+    volumes:
+      - "${MINIBOORU_DATA_DIR:-./data/minibooru}:/data"   # database + files + thumbs (put this on the big disk)

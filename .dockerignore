@@ -1,0 +1,10 @@
+.venv
+.git
+data
+tests
+.pytest_cache
+__pycache__
+*.sqlite
+.env
+.env.*
+cookies*.txt

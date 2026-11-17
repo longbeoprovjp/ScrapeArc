@@ -1,0 +1,237 @@
+<!doctype html><html lang="en"{% if brand.dim %} class="soft-bg"{% endif %}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="/manifest.webmanifest"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="theme-color" content="#1e3a8a"><meta name="apple-mobile-web-app-title" content="{{ brand.name }}">
+<title>{% block title %}{{ brand.name }}{% endblock %}</title><link rel="icon" href="/favicon.ico?v={{ brand.icon_v }}" sizes="any"><link rel="icon" type="image/png" href="/brand/favicon-64.png?v={{ brand.icon_v }}"><link rel="apple-touch-icon" href="/brand/apple-touch-icon.png?v={{ brand.icon_v }}">
+{% set bgv = bg_versions() %}<style id="bgcss">/* backgrounds are stored on the server: one for desktops, one for phones (narrow screens) */
+:root{--bgimg:{% if bgv.desktop %}url("/background/desktop?v={{ bgv.desktop }}"){% else %}none{% endif %}}
+@media (max-width:760px){:root{--bgimg:{% if bgv.mobile %}url("/background/mobile?v={{ bgv.mobile }}"){% else %}none{% endif %}}}</style>
+<script>const MBK={{ brand.theme_key|tojson }};</script><script>if(navigator.standalone)document.documentElement.classList.add("standalone")</script><script>/* apply saved colors before first paint (no flash). Stored per browser in localStorage; the background image is not. */
+try{const s=JSON.parse(localStorage.getItem(MBK)||'{}'),r=document.documentElement.style;
+for(const[k,v]of Object.entries(s)){if(k==='bgimg')continue;r.setProperty('--'+k,(k==='radius'||k==='thumb')&&/^[0-9.]+$/.test(v)?v+'px':v)}
+if(s.colsd)document.documentElement.dataset.colsd=s.colsd;if(s.colsm)document.documentElement.dataset.colsm=s.colsm;
+/* a background saved the old way (in this browser only) moves to the server once, for this kind of device, if that slot is empty */
+if(s.bgimg){const slot=matchMedia('(max-width:760px)').matches?'mobile':'desktop',have={{ bgv|tojson }};
+ if(have[slot]){delete s.bgimg;localStorage.setItem(MBK,JSON.stringify(s))}
+ else{r.setProperty('--bgimg','url("'+s.bgimg+'")');window.mbOldBg={slot:slot,url:s.bgimg}}}}catch(e){}
+window.mbSetBgCss=function(v){document.getElementById('bgcss').textContent=
+':root{--bgimg:'+(v.desktop?'url("/background/desktop?v='+v.desktop+'")':'none')+'}'+
+'@media (max-width:760px){:root{--bgimg:'+(v.mobile?'url("/background/mobile?v='+v.mobile+'")':'none')+'}}'};
+window.mbUploadBg=async function(slot,blob){const fd=new FormData();fd.append('file',blob,'bg.jpg');
+const r=await fetch('/background/'+slot,{method:'POST',body:fd,credentials:'same-origin'});
+if(!r.ok)throw new Error((await r.text()).slice(0,200)||('HTTP '+r.status));mbSetBgCss((await r.json()).versions)};
+window.mbIsPhone=()=>matchMedia('(max-width:760px)').matches;
+if(window.mbOldBg)addEventListener('load',async()=>{try{const o=mbOldBg,blob=await (await fetch(o.url)).blob();
+ await mbUploadBg(o.slot,blob);document.documentElement.style.removeProperty('--bgimg');
+ const s=JSON.parse(localStorage.getItem(MBK)||'{}');delete s.bgimg;localStorage.setItem(MBK,JSON.stringify(s))}catch(e){}});</script>
+<style>
+:root{--bg:#f3f4f8;--fg:#1b1d24;--mut:#62667a;--card:#ffffff;--head:#ffffff;--acc:#2563eb;--btn:#2563eb;--btnfg:#ffffff;
+--line:#1b1d2417;--danger:#d64545;--note:#eef0fd;--dposted:#c2410c;--dsaved:#0f766e;--radius:12px;--thumb:180px;--dim:{{ brand.dim }};--shadow:0 1px 2px #1b1d2414,0 2px 8px #1b1d240d;--lift:0 10px 28px #1b1d2430}
+@media(prefers-color-scheme:dark){:root{--bg:#0a1224;--fg:#e8edf7;--mut:#94a0b8;--card:#111c33;--head:#1e3a8a;--acc:#60a5fa;--btn:#2563eb;--line:#ffffff1c;--danger:#ef6262;--note:#14213f;--dposted:#fb923c;--dsaved:#2dd4bf;--shadow:0 1px 2px #0006,0 2px 10px #0004;--lift:0 12px 30px #000a}}
+/* colour roles you can change in Customize; each defaults to the colour it always had */
+:root{--headfg:var(--fg);--notefg:var(--fg);--inbg:var(--card);--infg:var(--fg);--inline:var(--line);--ghostfg:var(--fg);--ghostline:var(--line)}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;color:var(--fg);font:15px/1.55 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;background:var(--bg)}
+/* the background sits on its own layer the size of the screen: phones (iOS) ignore "fixed" page backgrounds and would
+   stretch the picture over the whole scrolling page, showing only a small zoomed-in part of it */
+body::before{content:"";position:fixed;left:0;top:0;width:100%;height:100vh;height:100lvh;z-index:-1;pointer-events:none;
+background:linear-gradient(color-mix(in srgb,var(--bg) calc(var(--dim) * 100%),transparent),color-mix(in srgb,var(--bg) calc(var(--dim) * 100%),transparent)),var(--bgimg) center/cover no-repeat}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+::selection{background:color-mix(in srgb,var(--acc) 35%,transparent)}
+header{position:sticky;top:0;z-index:20;display:flex;gap:12px;align-items:center;padding:10px 20px;flex-wrap:wrap;
+background:color-mix(in srgb,var(--head) 82%,transparent);-webkit-backdrop-filter:saturate(1.6) blur(14px);backdrop-filter:saturate(1.6) blur(14px);
+border-bottom:1px solid var(--line)}
+header .brand{font-weight:800;font-size:18px;letter-spacing:-.02em;color:var(--headfg);margin-right:6px;display:flex;align-items:center;gap:8px}
+header .brand:hover{text-decoration:none}
+header .brand img{width:34px;height:34px;border-radius:10px;object-fit:cover;display:block;flex:none;box-shadow:0 0 0 1px var(--line)}
+header form{flex:1;display:flex;gap:8px;min-width:200px;max-width:640px}
+header nav{display:flex;gap:2px;align-items:center;margin-left:auto;flex-wrap:wrap}
+header nav a,header nav button{padding:6px 12px;border-radius:999px;color:var(--headfg);font-size:14px;font-weight:500;border:0;background:none}
+header nav a:hover,header nav button:hover{background:var(--line);text-decoration:none;filter:none}
+header nav form{flex:none;display:block}
+input,select,textarea,button{font:inherit;padding:8px 12px;border-radius:calc(var(--radius) - 3px);border:1px solid var(--inline);background:var(--inbg);color:var(--infg);transition:border-color .15s,box-shadow .15s,filter .12s,transform .05s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 25%,transparent)}
+header input[name=q]{flex:1;border-radius:999px;padding-left:16px;background:color-mix(in srgb,var(--infg) 6%,var(--inbg))}
+header form button{border-radius:999px;padding:8px 18px}
+header input[name=q]{min-width:0}
+@media (max-width:600px){header form{order:3;flex-basis:100%;max-width:none;min-width:0}}   /* phones: search gets its own row */
+button{cursor:pointer;background:var(--btn);color:var(--btnfg);border-color:transparent;font-weight:600}
+button:hover{filter:brightness(1.08)}button:active{transform:translateY(1px)}button:disabled{opacity:.45;cursor:default;filter:none}
+button.ghost{background:transparent;color:var(--ghostfg);border-color:var(--ghostline);font-weight:500}
+button.ghost:hover{background:color-mix(in srgb,var(--fg) 7%,transparent);filter:none}
+button.danger{background:var(--danger)!important;border-color:transparent!important;color:#fff!important}
+input[type=checkbox]{accent-color:var(--acc)}
+input[type=color]{background:var(--card);border-color:var(--line);padding:3px;width:42px;height:32px;cursor:pointer}   /* colour swatches are not input boxes */
+main{padding:22px 20px 48px;max-width:1360px;margin:auto}
+h2,h3{margin:.5em 0 .4em;letter-spacing:-.015em}h2{font-size:24px}h3{font-size:17px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--thumb),1fr));gap:16px}
+/* posts per row picked on the grid toolbar: one choice for desktops, one for phones (Auto = by thumbnail size) */
+@media(min-width:761px){html[data-colsd] .grid{grid-template-columns:repeat(var(--colsd),minmax(0,1fr))}.gp-phone{display:none!important}}
+@media(max-width:760px){html[data-colsm] .grid{grid-template-columns:repeat(var(--colsm),minmax(0,1fr))}.gp-desk{display:none!important}}
+html[data-colsm="1"] .grid .cap{opacity:1;transform:none}
+.gridpick{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:999px;background:var(--card);box-shadow:var(--shadow)}
+.gridpick .mut{padding:0 6px 0 8px;font-size:13px}
+.gridpick button{padding:4px 11px;border-radius:999px;font-size:13px;background:none;color:var(--fg);border:0;box-shadow:none}
+.gridpick button.on{background:var(--btn);color:var(--btnfg)}
+.grid .cell{position:relative}
+.grid .cell>a{display:block;aspect-ratio:1;background:var(--card);border-radius:var(--radius);overflow:hidden;position:relative;box-shadow:0 0 0 var(--poutw,0px) var(--pout,transparent),var(--shadow);transition:transform .18s,box-shadow .18s}
+.grid .cell>a:hover{transform:translateY(-3px);box-shadow:0 0 0 var(--poutw,0px) var(--pout,transparent),var(--lift);text-decoration:none}
+.grid img{width:100%;height:100%;object-fit:cover;transition:transform .35s}
+.grid .cell>a:hover img{transform:scale(1.06)}
+.cap{position:absolute;left:0;right:0;bottom:0;padding:26px 10px 8px;font-size:12.5px;font-weight:500;color:#fff;background:linear-gradient(transparent,#000d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+opacity:0;transform:translateY(4px);transition:opacity .18s,transform .18s}
+.grid .cell>a:hover .cap,.selecting .cap{opacity:1;transform:none}
+@media(hover:none){.cap{opacity:1;transform:none}}
+.badge{position:absolute;top:8px;right:8px;background:#0009;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:#fff;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;line-height:1.7}
+.pick-box{display:none;position:absolute;top:8px;left:8px;z-index:2;width:24px;height:24px;accent-color:var(--acc);cursor:pointer}
+.selecting .pick-box{display:block}
+.selecting .cell.on>a{outline:3px solid var(--acc);outline-offset:-3px}
+.selecting .cell.on>a img{opacity:.65}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0 16px}
+.toolbar .sp{flex:1}
+.sel-only{display:none}.selecting .sel-only{display:inline-block}.selecting .nosel{display:none}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:1px 10px;border-radius:999px;font-size:12px;font-weight:500;line-height:1.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+background:color-mix(in srgb,var(--c,var(--fg)) 11%,var(--card));color:var(--c,var(--fg));border:1px solid color-mix(in srgb,var(--c,var(--line)) 35%,transparent);transition:filter .12s,transform .1s}
+.chip:hover{filter:brightness(1.12);text-decoration:none;transform:translateY(-1px)}.chip.more{color:var(--mut);--c:var(--mut)}
+.chip.big{font-size:13.5px;padding:2px 12px}
+.tag{display:inline-block;margin:2px 4px 2px 0;font-weight:500}.mut{color:var(--mut)}
+/* new installs (darkened background): loose text gets a soft shadow so it stays readable over bright pictures */
+.soft-bg main .mut,.soft-bg main h2,.soft-bg main h3,.soft-bg main h4{text-shadow:0 0 3px var(--bg),0 0 8px var(--bg),0 0 14px var(--bg)}.soft-bg main .panel .mut,.soft-bg main .note .mut,.soft-bg main dialog *{text-shadow:none}
+.pager{margin:28px 0 8px;display:flex;gap:12px;align-items:center;justify-content:center}
+.pager a{padding:7px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-weight:500;box-shadow:var(--shadow)}
+.pager a:hover{border-color:var(--acc);text-decoration:none}
+.pager{flex-wrap:wrap}.jump{display:flex;gap:6px;align-items:center;margin:0}.jump input{width:5.5em}
+.postnav{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:0 0 12px}
+.postnav a,.postnav span.off{padding:7px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-weight:500;box-shadow:var(--shadow)}
+.postnav a:hover{border-color:var(--acc);text-decoration:none}.postnav span.off{opacity:.4;box-shadow:none}
+.empty{text-align:center;padding:70px 20px;color:var(--mut);border:2px dashed var(--line);border-radius:var(--radius);margin:10px 0}
+.empty b{display:block;font-size:18px;color:var(--fg);margin-bottom:4px}
+.media{max-width:100%;max-height:80vh;display:block;margin:0 auto 14px;border-radius:var(--radius);box-shadow:var(--shadow);background:var(--card)}
+.post{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:26px;align-items:start}
+.post-side{position:sticky;top:76px;display:flex;flex-direction:column;gap:12px}
+.post-side h2{margin:0;font-size:21px;line-height:1.25;word-break:break-word}
+.post-side .panel{background:var(--card);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
+.post-side .panel h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut)}
+.post-side .row{margin:0}.post-side textarea{resize:vertical}
+@media(max-width:960px){.post{grid-template-columns:1fr}.post-side{position:static}}
+table{border-collapse:separate;border-spacing:0;width:100%;background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin:8px 0}
+td,th{padding:8px 12px;text-align:left;border-bottom:1px solid var(--line)}tr:last-child td{border-bottom:0}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);background:color-mix(in srgb,var(--fg) 4%,var(--card))}
+table.tagtable{table-layout:fixed}.tagtable th:first-child,.tagtable td:first-child{width:44px}.tagtable th:last-child,.tagtable td:last-child{width:56px}
+tr:hover td{background:color-mix(in srgb,var(--acc) 5%,transparent)}
+textarea{width:100%}.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;align-items:center}
+details{background:var(--card);border-radius:var(--radius);padding:10px 14px;margin:10px 0;box-shadow:var(--shadow)}summary{cursor:pointer;font-weight:600}
+pre{background:var(--card);border-radius:var(--radius)}
+.note{background:var(--note);color:var(--notefg);border-radius:var(--radius);padding:10px 14px;margin:8px 0;box-shadow:var(--shadow);line-height:1.5}
+.note .mut{color:color-mix(in srgb,var(--notefg) 70%,var(--note))}
+.d-posted{color:var(--dposted);font-weight:600}.d-saved{color:var(--dsaved);font-weight:600}
+dialog{border:none;border-radius:16px;padding:0;background:var(--card);color:var(--fg);width:min(420px,94vw);box-shadow:0 20px 60px #0007}
+dialog::backdrop{background:#0008;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+dialog .in{padding:18px 20px;max-height:88vh;overflow:auto}
+dialog h3{margin:0 0 8px;font-size:18px}
+.crow{display:flex;align-items:center;gap:8px;margin:8px 0}.crow>span{flex:1}
+.cgroup{margin:14px 0 2px;padding-top:10px;border-top:1px solid var(--line);font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
+.cgroup:first-child{border-top:0;margin-top:4px;padding-top:0}
+.cwarn{margin:-4px 0 6px;font-size:12px;color:#e5a000}
+.crow input[type=color]{padding:0;width:44px;height:30px;border-radius:6px;cursor:pointer}
+.crow input[type=range]{flex:0 0 150px;padding:0}
+.crow button{padding:2px 8px}
+.custlink{display:flex;flex-direction:column;gap:2px;padding:12px 14px;margin:6px 0 4px;border-radius:var(--radius);background:color-mix(in srgb,var(--acc) 12%,var(--card));border:1px solid color-mix(in srgb,var(--acc) 40%,transparent);color:var(--fg)}
+.custlink:hover{text-decoration:none;border-color:var(--acc)}
+.a2hs-head{display:flex;gap:12px;align-items:flex-start}.a2hs-head img{width:56px;height:56px;border-radius:13px;flex:none;box-shadow:0 2px 8px #0005}
+.a2hs-head h3{margin:2px 0 4px}.a2hs-head p{margin:0;font-size:14px}
+.a2hs-steps{margin:14px 0 8px;padding-left:22px;line-height:1.9}.ios-share{width:20px;height:20px;vertical-align:-4px;color:var(--acc)}.custlink .mut{font-size:13px}
+@media(max-width:600px){main{padding:14px 12px 40px}header{padding:8px 12px}.grid{gap:10px}h2{font-size:20px}}
+/* home-screen app (iPhone "Add to Home Screen"): the header slides under the status bar / notch, and gets back + reload */
+header{padding-top:calc(10px + env(safe-area-inset-top));padding-left:max(20px,env(safe-area-inset-left));padding-right:max(20px,env(safe-area-inset-right))}
+@media(max-width:600px){header{padding-top:calc(8px + env(safe-area-inset-top));padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}}
+main{padding-bottom:calc(40px + env(safe-area-inset-bottom))}
+.appnav{display:none;gap:2px}.appnav button{background:none;color:var(--headfg);border:0;font-size:20px;line-height:1;padding:4px 9px;border-radius:999px}
+.appnav button:hover{background:var(--line);filter:none}
+@media (display-mode: standalone){.appnav{display:inline-flex}}html.standalone .appnav{display:inline-flex}
+</style></head><body>
+<header><span class="appnav"><button type="button" onclick="history.back()" title="Back" aria-label="Back">‹</button><button type="button" onclick="location.reload()" title="Reload" aria-label="Reload">↻</button></span><a class="brand" href="/"><img src="/brand/icon-128.png?v={{ brand.icon_v }}" alt="">{{ brand.name }}</a><form action="/" method="get"><input name="q" value="{{ q|default('') }}" placeholder="Search tags…  e.g. flower -night type:video"><button>Search</button></form>
+<nav><a href="/scrape">Scrape</a><a href="/tags">Tags</a><button type="button" class="ghost" id="cust-open">🎨 Customize</button>{% if auth_on %}<form action="/logout" method="post" style="flex:none;display:block"><button class="ghost">Log out</button></form>{% endif %}</nav></header>
+<main>{% block body %}{% endblock %}</main>
+
+<dialog id="a2hs"><div class="in">
+<div class="a2hs-head"><img src="/brand/apple-touch-icon.png?v={{ brand.icon_v }}" alt=""><div><h3>Get the app on your <span id="a2hs-dev">iPhone</span></h3><p class="mut a2hs-sub">For the best experience, add {{ brand.name }} to your Home Screen: it opens full screen like an app, with its own icon.</p></div></div>
+<ol class="a2hs-steps">
+<li>Tap <b>Share</b> <svg class="ios-share" viewBox="0 0 24 24" aria-label="Share" role="img"><path d="M12 3v12M12 3l-4 4M12 3l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> <span class="mut" id="a2hs-where">at the bottom of Safari (or in the ⋯ menu)</span>.</li>
+<li>Scroll down and tap <b>Add to Home Screen</b> <svg class="ios-share" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>.</li>
+<li>Keep <b>Open as Web App</b> on, then tap <b>Add</b>.</li>
+</ol>
+<p class="mut" style="font-size:13px">Then open {{ brand.name }} from your Home Screen and log in once there. Use <b>‹</b> and <b>↻</b> at the top to go back and reload.</p>
+<div class="row" style="justify-content:space-between;margin-top:12px"><button type="button" class="ghost" id="a2hs-later">Later</button><button type="button" id="a2hs-ok">Got it</button></div>
+</div></dialog>
+<dialog id="cust"><div class="in">
+<h3>Customize</h3>
+<button type="button" class="ghost" id="a2hs-open" hidden style="width:100%;margin:0 0 8px">📱 Add to Home Screen…</button>
+<a href="/customize" class="custlink"><b>🎨 Customize screen →</b><span class="mut">Colours for every box, ready-made setups, outlines, corner roundness and thumbnail size, with a live preview.</span></a>
+<p class="mut" style="margin:12px 0 0">Name, icon and background pictures are shared by all your devices.</p>
+<div class="crow"><span>Name</span><input id="sitename" maxlength="40" value="{{ brand.name }}" style="max-width:150px"><button class="ghost" type="button" id="sitename-save">Save</button></div>
+<div class="crow"><span>Icon</span><input type="file" id="iconfile" accept="image/*" style="max-width:150px"><button class="ghost" type="button" id="iconreset" title="Back to the default icon">↺</button></div>
+<div class="crow"><span>Desktop background</span><input type="file" class="bgfile" data-slot="desktop" accept="image/*" style="max-width:150px"><button class="ghost bgclear" type="button" data-slot="desktop" title="Remove">✕</button></div>
+<div class="crow"><span>Phone background</span><input type="file" class="bgfile" data-slot="mobile" accept="image/*" style="max-width:150px"><button class="ghost bgclear" type="button" data-slot="mobile" title="Remove">✕</button></div>
+<p class="mut" id="bgstatus" style="margin:0;min-height:1.2em"></p>
+<div class="row" style="margin-top:14px;justify-content:flex-end"><button type="button" id="cclose">Done</button></div>
+</div></dialog>
+
+<script>
+(function(){
+const KEY=MBK,root=document.documentElement,TH={{ theme_cfg|tojson }};
+let st={};try{st=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
+const LAYOUT=['dim','radius','thumb','colsd','colsm','pout','poutw'];
+const $=id=>document.getElementById(id);
+function save(){try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){alert('Could not save (storage blocked).')}}
+function apply(){for(const f of [...TH.roles,...LAYOUT])root.style.removeProperty('--'+f);
+for(const k of ['colsd','colsm']){if(st[k])root.dataset[k]=st[k];else delete root.dataset[k]}
+for(const[k,v]of Object.entries(st)){if(k==='bgimg')continue;root.style.setProperty('--'+k,(k==='radius'||k==='thumb')?v+'px':v)}}
+const raw=k=>getComputedStyle(root).getPropertyValue('--'+k).trim(),hex6=v=>/^#[0-9a-f]{6}$/i.test(v);
+function lum(h){const c=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:((v+.055)/1.055)**2.4);return .2126*c[0]+.7152*c[1]+.0722*c[2]}
+function ratio(a,b){const x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)}
+/* the colour engine, shared with the Customize screen page */
+window.mbTheme={cfg:TH,get:k=>st[k],all:()=>({...st}),raw,hex6,ratio,
+ set(k,v){if(v===undefined||v===null||v==='')delete st[k];else st[k]=v;apply();save()},
+ load(colors,dim){const keep={};for(const k of LAYOUT)if(st[k]!==undefined)keep[k]=st[k];st=Object.assign({},colors,keep);if(dim!==undefined)st.dim=dim;apply();save()},
+ reset(){st={};apply();save()},
+ check(k){const p=TH.pairs[k];if(!p)return null;const a=raw(k),b=raw(p[0]);return (hex6(a)&&hex6(b))?{r:ratio(a,b),need:p[1]}:null}};
+/* posts per row (the picker on the grid toolbar); '' = Auto */
+window.mbSetCols=(k,v)=>mbTheme.set(k,v);
+document.querySelectorAll('.gridpick').forEach(g=>{const k=g.dataset.k,mark=()=>g.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===(st[k]||'')));
+ g.querySelectorAll('button').forEach(b=>b.onclick=()=>{mbSetCols(k,b.dataset.v);mark()});mark()});
+$('cust-open').onclick=()=>$('cust').showModal();
+/* iPhone/iPad in the browser: suggest adding the app to the Home Screen (once; "Later" asks again in 3 days) */
+(function(){const ua=navigator.userAgent,ios=/iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1);
+ const app=navigator.standalone||matchMedia('(display-mode: standalone)').matches,K='mb-a2hs',d=$('a2hs');if(!ios||app||!d)return;
+ if(!/Safari/.test(ua)||/CriOS|FxiOS|EdgiOS/.test(ua))$('a2hs-where').textContent='in your browser\'s menu';
+ if(/iPad/.test(ua)||/Macintosh/.test(ua))$('a2hs-dev').textContent='iPad';
+ const open=()=>{if(!d.open)d.showModal()};$('a2hs-open').hidden=false;$('a2hs-open').onclick=()=>{$('cust').close();open()};
+ $('a2hs-ok').onclick=()=>{try{localStorage.setItem(K,'done')}catch(e){}d.close()};
+ $('a2hs-later').onclick=()=>{try{localStorage.setItem(K,String(Date.now()+3*864e5))}catch(e){}d.close()};
+ let v=null;try{v=localStorage.getItem(K)}catch(e){}
+ if(location.pathname!=='/setup'&&v!=='done'&&!(v&&Date.now()<+v))setTimeout(open,900)})();$('cclose').onclick=()=>$('cust').close();
+$('cust').addEventListener('click',e=>{if(e.target===$('cust'))$('cust').close()});
+const bgmsg=t=>{$('bgstatus').textContent=t};
+const post=async(url,body)=>{const r=await fetch(url,{method:'POST',body,credentials:'same-origin'});if(!r.ok)throw new Error((await r.text()).replace(/<[^>]+>/g,' ').trim().slice(0,160)||('HTTP '+r.status));return r.json()};
+$('sitename-save').onclick=async()=>{const fd=new FormData();fd.append('name',$('sitename').value);
+ try{await post('/settings/name',fd);bgmsg('Name saved. Reloading…');setTimeout(()=>location.reload(),400)}catch(e){bgmsg('Could not save: '+e.message)}};
+$('iconfile').onchange=async()=>{const f=$('iconfile').files[0];if(!f)return;const fd=new FormData();fd.append('file',f);
+ bgmsg('Uploading icon…');try{await post('/settings/icon',fd);bgmsg('Icon saved. Reloading…');setTimeout(()=>location.reload(),400)}catch(e){bgmsg('Could not save: '+e.message)}};
+$('iconreset').onclick=async()=>{if(!confirm('Go back to the default icon?'))return;
+ try{await post('/settings/icon/reset');bgmsg('Default icon restored. Reloading…');setTimeout(()=>location.reload(),400)}catch(e){bgmsg('Could not reset: '+e.message)}};
+const SLOTNAME={desktop:'Desktop',mobile:'Phone'};
+document.querySelectorAll('#cust .bgfile').forEach(inp=>inp.onchange=()=>{const f=inp.files[0];if(!f)return;inp.value='';
+/* open the crop editor, already set to this slot's screen shape; come back to Customize when done */
+$('cust').close();mbBgEditor.open(URL.createObjectURL(f),{slot:inp.dataset.slot,revoke:true,
+ onDone:t=>{bgmsg(t);if(!$('cust').open)$('cust').showModal()}})});
+document.querySelectorAll('#cust .bgclear').forEach(btn=>btn.onclick=async()=>{const slot=btn.dataset.slot;
+if(!confirm('Remove the '+SLOTNAME[slot].toLowerCase()+' background on all devices?'))return;
+const r=await fetch('/background/'+slot+'/clear',{method:'POST',credentials:'same-origin'});
+if(r.ok){mbSetBgCss((await r.json()).versions);bgmsg(SLOTNAME[slot]+' background removed.')}else bgmsg('Could not remove it.')});
+apply();
+})();
+</script>
+{% include "_bgeditor.html" %}
+{% block scripts %}{% endblock %}
+</body></html>
