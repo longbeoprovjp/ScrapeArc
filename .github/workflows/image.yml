@@ -33,7 +33,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=ScrapeArc
             org.opencontainers.image.description=Self-hosted photo and video archive with a built-in scraper
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
