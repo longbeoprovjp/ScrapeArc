@@ -26,14 +26,16 @@ The scraper follows the listing's "next page" links on its own (`/page/2/` or `?
 
 Scrapes now, one time.
 
-- **Start at page**: begin further back in the listing. Useful to continue a long run you stopped: if it stopped at
-  page 1511, start the next run at 1511. Pages before it are skipped.
+- **Start at page**: begin further back in the listing. Useful to continue a long run you stopped: its run page
+  shows the **Current page** it was reading, so if that said 1511, start the next run at 1511 (a few pages lower is
+  safer). Pages before it are skipped.
 - **Stop**:
   - **after importing N posts**, or
   - **when it reaches posts older than a date**: good for "everything since 2024-01-01". The run also ends by itself
     when the listing runs out of pages.
 
-Press **▶ Start scrape now**. The page shows progress, the log and how long it has been running. **Stop** ends it
+Press **▶ Start scrape now**. The run page shows the **current listing page**, how long it has been running, and
+  the log. **Stop** ends it
 cleanly. Only one scrape runs at a time.
 
 ## 3. Auto rescan

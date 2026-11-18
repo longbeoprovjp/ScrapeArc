@@ -20,12 +20,14 @@ One Docker container, one data folder, no database server.
 - **Scraper that works on many sites.** No site is built in: it finds posts, titles, tags and media on its own, with
   CSS selectors as a fallback. Run it once, start from any page, stop at a date or a count, or let it rescan on a
   timer. You can also save a single post from its URL.
-- **"Save to …" bookmark** for sites where you need to be logged in. Your own browser downloads the post, so the app
-  never sees your password and nothing crawls the site.
+- **"Save to …" bookmark or toolbar button** for sites where you need to be logged in. Your own browser downloads
+  the post, so the app never sees your password and nothing crawls the site.
 - **No duplicate pictures.** If a post has resized copies of the same picture, only the largest is kept, but two shots
   that differ slightly (someone blinks) are both kept. Files you delete are never downloaded again.
 - **Yours to customize.** Pick the app's name and icon the first time you open it, set separate desktop and phone
   backgrounds (with cropping), and change the colors. Name, icon and backgrounds are shared by all your devices.
+- **Made for phones too.** Add it to your Home Screen to use it full screen like an app. It reopens on the post you
+  were looking at.
 - **Private by default.** It has a password login and stays on your own network. Add Tailscale for HTTPS from anywhere.
 
 ## Quick start

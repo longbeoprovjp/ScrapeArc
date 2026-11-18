@@ -699,3 +699,59 @@ def test_duplicate_actions_update_the_post_page_in_place(env, monkeypatch):
         c.execute("INSERT INTO dup_flags(a, b, dist) VALUES (?, ?, 2)", (a, b))
     page = TestClient(create_app()).get(f"/post/{a}?view=dups").text
     assert page.count('<form class="inplace"') == 3 and "location.replace(to)" in page   # no extra Back step
+
+
+def test_duplicate_review_page_shows_pairs_side_by_side(env, monkeypatch):
+    from fastapi.testclient import TestClient
+    from minibooru.web import create_app
+    monkeypatch.delenv("MINIBOORU_PASSWORD", raising=False)
+    with core.connect() as c:
+        ids = [c.execute("INSERT INTO posts(sha256, ext, mime, width, height) VALUES (?, 'png', 'image/png', ?, ?)",
+                         (f"r{i}", w, w)).lastrowid for i, w in enumerate((800, 1600, 500, 500))]
+        c.execute("INSERT INTO dup_flags(a, b, dist) VALUES (?, ?, 1)", (ids[0], ids[1]))
+        c.execute("INSERT INTO dup_flags(a, b, dist) VALUES (?, ?, 4)", (ids[2], ids[3]))
+    cl = TestClient(create_app())
+    page = cl.get("/dups/review").text
+    assert "Pair 1 of 2" in page and f"#{ids[0]} " in page and f"#{ids[1]} " in page
+    assert page.index('class="dside"') < page.index('class="dside hint"')     # the bigger picture (right) is suggested
+    assert "Pair 2 of 2" in cl.get("/dups/review?skip=1").text
+    assert "Pair 2 of 2" in cl.get("/dups/review?skip=99").text                # past the end: the last pair
+    cl.post(f"/post/{ids[0]}/dup/{ids[1]}/merge")                             # "keep right" = merge left into right
+    page = cl.get("/dups/review").text
+    assert "Pair 1 of 1" in page and f"#{ids[2]} " in page
+    assert "/dups/review" in cl.get("/?view=dups").text
+    cl.post(f"/post/{ids[2]}/dup/{ids[3]}/dismiss")
+    assert "No possible duplicates left" in cl.get("/dups/review").text
+
+
+def test_search_box_suggests_tags_most_used_first(env, monkeypatch):
+    from fastapi.testclient import TestClient
+    from minibooru.web import create_app
+    monkeypatch.delenv("MINIBOORU_PASSWORD", raising=False)
+    with core.connect() as c:
+        for i, tags in enumerate((["robin", "red_robin"], ["robin"], ["robot"], ["unused_x"])):
+            pid = c.execute("INSERT INTO posts(sha256, ext, mime) VALUES (?, 'png', 'image/png')", (f"g{i}",)).lastrowid
+            core.add_tags(c, pid, tags)
+        core.get_or_create_tag(c, "robe")                                        # a tag with no posts is not suggested
+    cl = TestClient(create_app())
+    names = [t["name"] for t in cl.get("/tags/suggest", params={"q": "rob"}).json()]
+    assert names == ["robin", "robot", "red_robin"]                              # starts-with first (most used first), then contains
+    assert [t["name"] for t in cl.get("/tags/suggest", params={"q": "-rob"}).json()][0] == "robin"   # works after a minus
+    assert cl.get("/tags/suggest", params={"q": "%"}).json() == [] and cl.get("/tags/suggest").json() == []
+    assert 'id="tagsug"' in cl.get("/").text
+
+
+def test_stats_page_counts_and_storage(env, monkeypatch):
+    from fastapi.testclient import TestClient
+    from minibooru.web import create_app
+    monkeypatch.delenv("MINIBOORU_PASSWORD", raising=False)
+    with core.connect() as c:
+        a = c.execute("INSERT INTO posts(sha256, ext, mime, posted, favorite) VALUES ('s1','png','image/png','2025-03-02 10:00:00',1)").lastrowid
+        c.execute("INSERT INTO posts(sha256, ext, mime, posted) VALUES ('s2','mp4','video/mp4','2025-04-01 10:00:00')")
+        c.execute("INSERT INTO post_media(post_id, pos, sha256, ext, mime) VALUES (?, 1, 's3', 'png', 'image/png')", (a,))
+        core.add_tags(c, a, ["robin"])
+    page = TestClient(create_app()).get("/stats").text
+    assert '<b>2</b><span>posts</span>' in page and '<b>2</b><span>pictures</span>' in page and '<b>1</b><span>videos</span>' in page
+    assert '<b>1</b><span>favorites</span>' in page and 'title="25-03' not in page and 'title="2025-03: 1 posts"' in page
+    assert "used by this archive" in page and "free of" in page and '>robin <span class="mut">1</span>' in page
+    assert '<a href="/stats">Stats</a>' in page

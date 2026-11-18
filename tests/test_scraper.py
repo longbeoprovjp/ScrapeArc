@@ -873,3 +873,59 @@ def test_run_log_tracks_current_page():
     log.append("Listing page 41: https://example.com/page/41/")
     log.append("  found 3 new post cards")
     assert log.page == 41
+
+
+def _wait_idle():
+    from minibooru import watcher
+    import time as _t
+    for _ in range(300):
+        if not watcher.scrape_lock.locked():
+            return
+        _t.sleep(0.05)
+
+
+def test_unfinished_run_continues_after_a_restart(site, tmp_path, monkeypatch):
+    import json
+    from fastapi.testclient import TestClient
+    from minibooru.web import create_app
+    monkeypatch.setattr(core, "DATA", tmp_path / "d")
+    monkeypatch.setitem(PAGES, "/rs/page/2/", ("text/html", b"<article><a href='/post/4/'><img src='/t4.jpg' alt='Robin p2'></a></article>"))
+    base, hits = site
+    spec = {"url": base + "/rs/", "keywords": ["robin"], "single": False, "limit": 1_000_000, "until": "2000-01-01",
+            "stop_text": "posts dated before Jan 1, 2000", "card": "", "title": "", "tag": "", "media": "", "date": "", "start_page": 1}
+    with core.connect() as c:      # what a run leaves behind when the app is stopped part-way (it had reached page 2)
+        core.set_setting(c, "unfinished_run", json.dumps({"spec": spec, "started": "2026-01-01 00:00:00", "resumes": 0, "page": 2}))
+    app = create_app()
+    app.state.resume_unfinished(0)
+    _wait_idle()
+    assert "/rs/page/2/" in hits and "/rs/" not in hits                         # carried on at page 2, page 1 not re-read
+    with core.connect() as c:
+        assert core.get_setting(c, "unfinished_run") is None                      # finished normally: nothing left to resume
+    page = TestClient(app).get("/scrape").text
+    assert page.count("<tr") >= 2                                                # the resumed run is in the history
+
+
+def test_run_saves_its_page_and_gives_up_after_repeated_restarts(tmp_path, monkeypatch):
+    import json
+    from minibooru.web import create_app
+    monkeypatch.setattr(core, "DATA", tmp_path / "d")
+    seen = {}
+    def fake_scrape(c, url, opt, log):
+        log("Listing page 7: " + url + "page/7/")
+        with core.connect() as c2:
+            seen["state"] = json.loads(core.get_setting(c2, "unfinished_run"))
+        return {}
+    monkeypatch.setattr(scraper, "scrape", fake_scrape)
+    from fastapi.testclient import TestClient
+    app = create_app()
+    TestClient(app).post("/scrape", data={"url": "https://example.com/l/", "keywords": "robin", "stop_mode": "date", "until": "2020-01-01"})
+    _wait_idle()
+    assert seen["state"]["page"] == 7 and seen["state"]["spec"]["until"] == "2020-01-01"   # saved while running
+    spec = seen["state"]["spec"]
+    with core.connect() as c:      # it already failed at page 7 three times in a row: don't try again
+        core.set_setting(c, "unfinished_run", json.dumps({"spec": spec, "started": "x", "resumes": 3, "page": 7, "last_resume_page": 7}))
+    seen.clear()
+    app.state.resume_unfinished(0)
+    _wait_idle()
+    with core.connect() as c:
+        assert core.get_setting(c, "unfinished_run") is None and not seen

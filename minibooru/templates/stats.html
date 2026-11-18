@@ -1,0 +1,53 @@
+{% extends "base.html" %}{% block title %}Stats · {{ brand.name }}{% endblock %}{% block body %}
+<h2>Stats</h2>
+<div class="tiles">
+<a class="tile" href="/"><b>{{ "{:,}".format(n.posts) }}</b><span>posts</span></a>
+<div class="tile"><b>{{ "{:,}".format(n.pictures) }}</b><span>pictures</span></div>
+<a class="tile" href="/?view=videos"><b>{{ "{:,}".format(n.videos) }}</b><span>videos</span></a>
+<a class="tile" href="/tags"><b>{{ "{:,}".format(n.tags) }}</b><span>tags in use</span></a>
+<a class="tile" href="/?view=fav"><b>{{ "{:,}".format(n.fav) }}</b><span>favorites</span></a>
+<a class="tile" href="/?view=bookmarked"><b>{{ "{:,}".format(n.bookmarked) }}</b><span>saved with the bookmark</span></a>
+<a class="tile" href="/dups/review"><b>{{ "{:,}".format(n.dups) }}</b><span>possible duplicates</span></a>
+<div class="tile"><b>{{ "{:,}".format(n.week) }}</b><span>added in the last 7 days</span></div>
+</div>
+
+{% set used = disk.files + disk.thumbs + disk.db %}
+<section class="spanel"><h3>Storage</h3>
+<div class="diskbar" title="This archive · other things on the drive · free">
+<i style="width:{{ (used / disk.disk * 100)|round(2) }}%;background:var(--btn)"></i>
+<i style="width:{{ ((disk.disk - disk.free - used) / disk.disk * 100)|round(2) }}%;background:color-mix(in srgb,var(--fg) 25%,transparent)"></i></div>
+<p><b>{{ size(used) }}</b> used by this archive <span class="mut">(pictures and videos {{ size(disk.files) }}, thumbnails {{ size(disk.thumbs) }}, database {{ size(disk.db) }})</span><br>
+<b>{{ size(disk.free) }}</b> free of {{ size(disk.disk) }} on this drive{% if posts_left %} <span class="mut">· room for about {{ "{:,}".format(posts_left) }} more posts at the current average size</span>{% endif %}</p>
+</section>
+
+{% if months %}<section class="spanel"><h3>Posts by month <span class="mut">(when they were posted on their site)</span></h3>
+<div class="bars">{% for r in months %}<div class="bar" title="{{ r.m }}: {{ r.n }} posts"><span class="v">{{ r.n }}</span><i style="height:{{ (r.n / mmax * 100)|round(1) }}%"></i><span class="k">{{ r.m[2:] }}</span></div>{% endfor %}</div>
+</section>{% endif %}
+
+<section class="spanel"><h3>Saved in the last 14 days</h3>
+{% if days %}<div class="bars short">{% for r in days %}<div class="bar" title="{{ r.d }}: {{ r.n }} posts"><span class="v">{{ r.n }}</span><i style="height:{{ (r.n / dmax * 100)|round(1) }}%"></i><span class="k">{{ r.d[5:] }}</span></div>{% endfor %}</div>
+{% else %}<p class="mut">Nothing saved in the last 14 days.</p>{% endif %}
+<p class="mut">Scraping: {{ "{:,}".format(n.runs) }} runs so far, {{ "{:,}".format(n.imported) }} posts imported by them{% if last %}. Last run: {{ (last.finished or last.started)[:16] }} UTC, {{ last.new or 0 }} new{% endif %}.</p>
+</section>
+
+{% if top %}<section class="spanel"><h3>Most-used tags</h3>
+<div class="chips">{% for t in top %}<a class="chip" style="--c:{{ t.color }}" href="/tag/{{ t.name|urlencode }}">{{ t.name }} <span class="mut">{{ "{:,}".format(t.n) }}</span></a>{% endfor %}</div>
+</section>{% endif %}
+
+<style>
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin:8px 0 16px}
+.tile{display:flex;flex-direction:column;gap:2px;padding:14px 16px;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);color:var(--fg)}
+a.tile:hover{text-decoration:none;outline:2px solid color-mix(in srgb,var(--acc) 50%,transparent)}
+.tile b{font-size:26px;letter-spacing:-.02em;line-height:1.15}.tile span{color:var(--mut);font-size:13.5px}
+.spanel{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin:0 0 16px}
+.spanel h3{margin:0 0 10px}.spanel h3 .mut{font-size:13px;font-weight:500}.spanel p{margin:10px 0 0}
+.diskbar{display:flex;height:14px;border-radius:999px;overflow:hidden;background:color-mix(in srgb,var(--acc) 12%,transparent)}
+.diskbar i{display:block;height:100%;min-width:2px}
+.bars{display:flex;align-items:flex-end;gap:4px;height:170px;padding-top:18px}
+.bars.short{height:120px}
+.bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0;position:relative}
+.bar i{display:block;width:100%;max-width:38px;background:var(--btn);border-radius:5px 5px 2px 2px;min-height:2px}
+.bar .v{font-size:11px;color:var(--mut);margin-bottom:2px}.bar .k{font-size:10.5px;color:var(--mut);margin-top:4px;white-space:nowrap}
+@media(max-width:600px){.tile b{font-size:21px}.bars{gap:2px}.bar .v{display:none}.bar .k{font-size:9px;writing-mode:vertical-rl;transform:rotate(180deg)}}
+</style>
+{% endblock %}

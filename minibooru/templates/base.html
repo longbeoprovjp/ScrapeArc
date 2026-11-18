@@ -193,10 +193,17 @@ border:2px dashed var(--ghostline);border-radius:var(--radius);background:color-
 .drop.over,.drop:hover{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 12%,transparent)}.drop.has{border-style:solid;border-color:var(--acc)}
 .drop b{font-size:15px}
 .toolbar button.ghost{background:var(--card);box-shadow:var(--shadow)}
+/* tag suggestions under the search box */
+header form.hsearch{position:relative}
+#tagsug{position:absolute;left:0;top:calc(100% + 6px);z-index:30;margin:0;padding:6px;list-style:none;min-width:min(340px,100%);max-width:100%;
+background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px #0006}
+#tagsug li{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:14px}
+#tagsug li.on,#tagsug li:hover{background:color-mix(in srgb,var(--acc) 16%,transparent)}
+#tagsug .dot{width:9px;height:9px;border-radius:50%;flex:none}#tagsug .n{margin-left:auto;color:var(--mut);font-size:12.5px}
 </style></head><body>
-<header{% if q %} class="search-open"{% endif %}><span class="appnav"><button type="button" onclick="mbBack()" title="Back" aria-label="Back">‹</button><button type="button" onclick="location.reload()" title="Reload" aria-label="Reload">↻</button></span><a class="brand" href="/"><img src="/brand/icon-128.png?v={{ brand.icon_v }}" alt=""><span>{{ brand.name }}</span></a><form class="hsearch" action="/" method="get" role="search"><input name="q" value="{{ q|default('') }}" placeholder="Search tags…  e.g. flower -night type:video"><button>Search</button></form>
+<header{% if q %} class="search-open"{% endif %}><span class="appnav"><button type="button" onclick="mbBack()" title="Back" aria-label="Back">‹</button><button type="button" onclick="location.reload()" title="Reload" aria-label="Reload">↻</button></span><a class="brand" href="/"><img src="/brand/icon-128.png?v={{ brand.icon_v }}" alt=""><span>{{ brand.name }}</span></a><form class="hsearch" action="/" method="get" role="search"><input name="q" autocomplete="off" aria-autocomplete="list" aria-controls="tagsug" value="{{ q|default('') }}" placeholder="Search tags…  e.g. flower -night type:video"><button>Search</button><ul id="tagsug" role="listbox" hidden></ul></form>
 <span class="hphone"><button type="button" class="hbtn" id="hs-toggle" aria-label="Search" title="Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><button type="button" class="hbtn" id="hm-toggle" aria-label="Menu" title="Menu" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></span>
-<nav id="hnav"><a href="/">Gallery</a><a href="/scrape">Scrape</a><a href="/tags">Tags</a><button type="button" class="ghost" id="cust-open">🎨 Customize</button>{% if auth_on %}<form action="/logout" method="post" style="flex:none;display:block"><button class="ghost">Log out</button></form>{% endif %}</nav></header>
+<nav id="hnav"><a href="/">Gallery</a><a href="/scrape">Scrape</a><a href="/tags">Tags</a><a href="/stats">Stats</a><button type="button" class="ghost" id="cust-open">🎨 Customize</button>{% if auth_on %}<form action="/logout" method="post" style="flex:none;display:block"><button class="ghost">Log out</button></form>{% endif %}</nav></header>
 <script>(function(){const h=document.querySelector('header'),m=document.getElementById('hm-toggle'),sb=document.getElementById('hs-toggle');
 m.onclick=()=>{const o=h.classList.toggle('menu-open');m.setAttribute('aria-expanded',o)};
 sb.onclick=()=>{const o=h.classList.toggle('search-open');if(o)h.querySelector('.hsearch input').focus()};
@@ -217,6 +224,24 @@ window.mbBack=()=>{if(history.length>1)return history.back();if(isPost){try{sess
 document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest("#nav-list");if(!a)return;e.preventDefault();
  const url=mbListUrl(a.getAttribute("href"));let ref="";try{const r=new URL(document.referrer);if(r.origin===location.origin)ref=r.pathname+r.search}catch(x){}
  if(ref===url)return history.back();try{sessionStorage.setItem("mb-back","1")}catch(x){}location.href=url})})();</script>
+<script>/* tag suggestions: completes the word being typed in the search box (also after a leading "-") */
+(function(){const f=document.querySelector('form.hsearch');if(!f)return;const inp=f.querySelector('input[name=q]'),ul=document.getElementById('tagsug');
+let items=[],on=-1,timer=null,seq=0;
+const word=()=>{const v=inp.value.slice(0,inp.selectionStart||inp.value.length),m=v.match(/(^|\s)(-?)([^\s:]*)$/);return m?{neg:m[2],w:m[3],start:v.length-m[3].length,end:v.length}:null};
+function close(){ul.hidden=true;items=[];on=-1;inp.setAttribute('aria-expanded','false')}
+function draw(){ul.textContent='';items.forEach((t,i)=>{const li=document.createElement('li');li.setAttribute('role','option');if(i===on)li.className='on';
+const d=document.createElement('span');d.className='dot';d.style.background=t.color;const nm=document.createElement('span');nm.textContent=t.name;
+const n=document.createElement('span');n.className='n';n.textContent=t.n;li.append(d,nm,n);li.onmousedown=e=>{e.preventDefault();pick(i)};ul.appendChild(li)});
+ul.hidden=!items.length;inp.setAttribute('aria-expanded',items.length?'true':'false')}
+function pick(i){const w=word(),t=items[i];if(!w||!t)return;const v=inp.value;inp.value=v.slice(0,w.start)+t.name+' '+v.slice(w.end).replace(/^\S*\s?/,'');
+const pos=w.start+t.name.length+1;inp.setSelectionRange(pos,pos);close();inp.focus()}
+inp.addEventListener('input',()=>{clearTimeout(timer);const w=word();if(!w||!w.w){close();return}
+timer=setTimeout(async()=>{const my=++seq;try{const r=await fetch('/tags/suggest?q='+encodeURIComponent(w.w),{credentials:'same-origin'});
+if(!r.ok||my!==seq)return;items=await r.json();on=items.length?0:-1;draw()}catch(e){}},120)});
+inp.addEventListener('keydown',e=>{if(ul.hidden)return;
+if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();on=(on+(e.key==='ArrowDown'?1:-1)+items.length)%items.length;draw()}
+else if((e.key==='Tab'||e.key==='Enter')&&on>=0){e.preventDefault();pick(on)}else if(e.key==='Escape')close()});
+inp.addEventListener('blur',()=>setTimeout(close,100))})();</script>
 <main>{% block body %}{% endblock %}</main>
 
 <dialog id="a2hs"><div class="in">

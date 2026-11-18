@@ -8,28 +8,45 @@ nothing crawls the site, and your password never reaches the app.
 
 [← Back to the README](../README.md)
 
-<!-- ![The save window](screenshots/bookmark.jpg) -->
+![The save window](screenshots/bookmark.jpg)
 
 ## Add the bookmark (once per browser)
 
 1. In the app, open **Scrape** → **Save to … bookmark**, or go to `<your app address>/clip/bookmarklet`.
-2. Drag the **⭳ Save to …** button onto the **bookmarks bar** (the strip under the address bar). Dropping it on the ☆
+2. Drag the **📥 Save to …** button onto the **bookmarks bar** (the strip under the address bar). Dropping it on the ☆
    star icon doesn't work. Press **Ctrl+Shift+B** to show the bar if it's hidden.
 
 If dragging doesn't work, make the bookmark by hand:
 
 1. On that page, open **"Can't drag? Make it by hand"** and press **Copy**.
 2. Open the bookmark manager (**Ctrl+Shift+O** in Chrome, Brave and Firefox) and add a new bookmark.
-3. Name it **Save to …**, paste the copied text into the URL box, and save.
+3. Name it **📥 Save to …**, paste the copied text into the URL box, and save.
 
 The bookmark is tied to the address you got it from. For example, one taken from `http://127.0.0.1:8090` saves into
 that local copy, and one taken from your https address saves into the server. Get it again if you switch addresses.
 
+## Or: a toolbar button with the app's icon
+
+Bookmarks can't show a picture as their icon, so the bookmark uses 📥. If you want the app's own icon, use the
+toolbar button instead. It sits next to the address bar and does exactly the same job. It works in Brave, Chrome
+and Edge.
+
+1. On the bookmark page, press **Download the button** and unzip it to a folder you keep (the browser loads it from
+   there).
+2. Open `brave://extensions` (Chrome: `chrome://extensions`, Edge: `edge://extensions`) and turn on **Developer
+   mode**.
+3. Press **Load unpacked** and choose the unzipped folder.
+4. Click the puzzle-piece icon by the address bar and pin **Save to …**.
+
+It can only see the tab you click it on, at the moment you click. It carries the app's name, icon and address, so
+download it again (and press ↻ on its card) if you change any of them.
+
 ## Use it
 
 1. Open the post on the site, logged in as usual.
-2. Click the bookmark. A small window opens with the post's pictures, title, upload date and tags. If the browser
-   blocks the pop-up, allow pop-ups for that site and click again.
+2. Click the bookmark (or the toolbar button). A small window opens with the post's pictures, title, upload date and
+   tags. If the browser blocks the window, a blue **Click here to open the save window** bubble appears on the page:
+   click it.
 3. Leave out files you don't want (✕), fix the title, and remove or add tags.
 4. Press **Save**. A bubble in the corner of the page shows **Saving…** and then **Saved**, and the window closes.
 
@@ -48,6 +65,6 @@ Right-click the bookmark on the bookmarks bar and choose **Delete**, or find it 
 ## Troubleshooting
 
 - **Nothing happens when you click it.** Some sites block bookmarks like this one (with a strict Content Security
-  Policy). A small browser extension could do the same job.
+  Policy). Use the toolbar button instead.
 - **No pictures were found, or the tags are wrong.** Fix them in the window before saving.
 - **iPhone.** Mobile browsers limit bookmarks like this; use a computer.

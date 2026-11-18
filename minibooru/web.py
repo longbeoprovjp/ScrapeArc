@@ -6,6 +6,7 @@ import html
 import os
 import re
 import secrets
+import shutil
 import tempfile
 import threading
 import time
@@ -104,6 +105,14 @@ def search_page(c, q: str, page: int, sort: str, view: str, per: int = core.PER_
         page = min(max(page, 1), pages)
         rows, total = core.search(c, q, page, per=per, sort=sort, view=view, src=src)
     return rows, total, page, pages
+
+
+def human_size(n: float) -> str:
+    """1536 -> '1.5 KB', 3.2e9 -> '3.2 GB'."""
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
 
 
 def read_stop(mode: str, count: int, until_text: str):
@@ -530,6 +539,108 @@ def create_app(scheduler: bool = False) -> FastAPI:
                 raise HTTPException(404)
         return RedirectResponse(f"/post/{pid}", 303)
 
+    disk_cache: dict = {}
+
+    def data_size() -> dict:
+        """Bytes used by pictures/videos and thumbnails (walking 30,000+ files takes a moment: kept for 10 minutes)."""
+        if disk_cache.get("at", 0) > time.time() - 600:
+            return disk_cache
+        out = {}
+        for part in ("files", "thumbs"):
+            total, stack = 0, [core.DATA / part]
+            while stack:
+                try:
+                    with os.scandir(stack.pop()) as it:
+                        for e in it:
+                            if e.is_dir(follow_symlinks=False):
+                                stack.append(e.path)
+                            elif e.is_file(follow_symlinks=False):
+                                total += e.stat(follow_symlinks=False).st_size
+                except OSError:
+                    pass
+            out[part] = total
+        db = core.DATA / "db.sqlite"
+        out["db"] = db.stat().st_size if db.exists() else 0
+        du = shutil.disk_usage(core.DATA)
+        out.update(free=du.free, disk=du.total, at=time.time())
+        disk_cache.clear()
+        disk_cache.update(out)
+        return out
+
+    @app.get("/stats")
+    def stats(request: Request):
+        with core.connect() as c:
+            one = lambda sql, *a: c.execute(sql, a).fetchone()[0]
+            files = """SELECT mime FROM posts UNION ALL SELECT mime FROM post_media"""
+            nums = {"posts": one("SELECT COUNT(*) FROM posts"),
+                    "files": one(f"SELECT COUNT(*) FROM ({files})"),
+                    "videos": one(f"SELECT COUNT(*) FROM ({files}) WHERE mime LIKE 'video/%'"),
+                    "tags": one("SELECT COUNT(DISTINCT tag_id) FROM post_tags"),
+                    "fav": one("SELECT COUNT(*) FROM posts WHERE favorite=1"),
+                    "dups": one("SELECT COUNT(*) FROM dup_flags WHERE status='open'"),
+                    "bookmarked": one(f"SELECT COUNT(*) FROM posts p WHERE {core.BOOKMARK_SQL}"),
+                    "week": one("SELECT COUNT(*) FROM posts WHERE created >= datetime('now', '-7 days')"),
+                    "runs": one("SELECT COUNT(*) FROM scrape_runs"),
+                    "imported": one("SELECT COALESCE(SUM(new), 0) FROM scrape_runs")}
+            nums["pictures"] = nums["files"] - nums["videos"]
+            months = c.execute("""SELECT substr(COALESCE(posted, created), 1, 7) AS m, COUNT(*) AS n FROM posts
+                                  GROUP BY m ORDER BY m DESC LIMIT 24""").fetchall()[::-1]
+            days = c.execute("""SELECT substr(created, 1, 10) AS d, COUNT(*) AS n FROM posts
+                                WHERE created >= date('now', '-13 days') GROUP BY d ORDER BY d""").fetchall()
+            top = c.execute("""SELECT t.name, cat.color, COUNT(*) AS n FROM post_tags pt JOIN tags t ON t.id=pt.tag_id
+                               JOIN categories cat ON cat.name=t.category WHERE t.name != ?
+                               GROUP BY pt.tag_id ORDER BY n DESC LIMIT 24""", (core.UPLOAD_TAG,)).fetchall()
+            last = c.execute("SELECT * FROM scrape_runs ORDER BY id DESC LIMIT 1").fetchone()
+        disk = data_size()
+        per_post = (disk["files"] / nums["posts"]) if nums["posts"] else 0
+        return tpl.TemplateResponse(request, "stats.html", {
+            "n": nums, "months": months, "mmax": max([r["n"] for r in months] or [1]), "days": days,
+            "dmax": max([r["n"] for r in days] or [1]), "top": top, "last": last, "disk": disk,
+            "posts_left": int(disk["free"] / per_post) if per_post else None, "size": human_size})
+
+    @app.get("/tags/suggest")
+    def tags_suggest(q: str = ""):
+        """Tags for the search box as you type: names starting with what you typed first, then ones containing it,
+        most-used first."""
+        word = core.normalize_tag(q.lstrip("-"))[:40]
+        if not word:
+            return []
+        like = word.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        sql = """SELECT t.name, cat.color, (SELECT COUNT(*) FROM post_tags pt WHERE pt.tag_id=t.id) AS n
+                 FROM tags t JOIN categories cat ON cat.name=t.category WHERE t.name LIKE ? ESCAPE '\\'
+                 ORDER BY n DESC, t.name LIMIT 8"""
+        with core.connect() as c:
+            rows = c.execute(sql, (like + "%",)).fetchall()
+            if len(rows) < 8:
+                seen = {r["name"] for r in rows}
+                rows += [r for r in c.execute(sql, ("%" + like + "%",)).fetchall() if r["name"] not in seen][:8 - len(rows)]
+        return [{"name": r["name"], "color": r["color"], "n": r["n"]} for r in rows if r["n"]]
+
+    @app.get("/dups/review")
+    def dups_review(request: Request, skip: int = 0):
+        """Possible duplicates one pair at a time, side by side, with one-key choices."""
+        skip = max(0, skip)
+        with core.connect() as c:
+            total = c.execute("SELECT COUNT(*) FROM dup_flags WHERE status='open'").fetchone()[0]
+            skip = min(skip, max(0, total - 1))
+            row = c.execute("SELECT a, b, dist FROM dup_flags WHERE status='open' ORDER BY dist, a, b LIMIT 1 OFFSET ?",
+                            (skip,)).fetchone()
+            sides = []
+            if row:
+                for pid in (row["a"], row["b"]):
+                    p = c.execute("SELECT * FROM posts WHERE id=?", (pid,)).fetchone()
+                    files = core.post_files(c, pid)
+                    host = re.sub(r"^https?://(www\.)?", "", p["source"] or "").split("/")[0]
+                    sides.append({"p": p, "files": files, "tags": core.post_tags(c, pid), "host": host,
+                                  "pixels": (p["width"] or 0) * (p["height"] or 0)})
+        hint = None
+        if sides:   # a nudge only: the bigger picture, then the one with more files, then more tags
+            score = [(s["pixels"], len(s["files"]), len(s["tags"])) for s in sides]
+            if score[0] != score[1]:
+                hint = 0 if score[0] > score[1] else 1
+        return tpl.TemplateResponse(request, "dups.html", {"sides": sides, "dist": row["dist"] if row else None,
+                                                           "total": total, "skip": skip, "hint": hint})
+
     @app.post("/posts/bulk-delete")
     def post_bulk_delete(ids: list[int] = Form([]), next: str = Form("/")):
         with core.connect() as c:
@@ -683,6 +794,15 @@ def create_app(scheduler: bool = False) -> FastAPI:
                 raise HTTPException(400, str(e))
         return RedirectResponse("/tags", 303)
 
+    def pending_resume(c):
+        """Listing page of a run that a restart cut off and that will continue by itself (None if there is none)."""
+        if watcher.current:
+            return None
+        try:
+            return json.loads(core.get_setting(c, "unfinished_run") or "null")["page"]
+        except (TypeError, KeyError, ValueError):
+            return None
+
     def scrape_context(c):
         wid, jid = watcher.running_wid, watcher.current_jid
         cur_url, cur_stop = ((f"/watch/{wid}", f"/watches/{wid}/stop") if wid is not None
@@ -690,7 +810,8 @@ def create_app(scheduler: bool = False) -> FastAPI:
         return {"runs": c.execute("SELECT * FROM scrape_runs ORDER BY id DESC LIMIT 100").fetchall(), "watches": watch_rows(c),
                 "scheduler": scheduler, "current": watcher.current, "running_wid": wid,
                 "current_url": cur_url, "current_stop": cur_stop,
-                "current_for": scraper.fmt_duration(time.time() - watcher.started_at) if watcher.started_at else ""}
+                "current_for": scraper.fmt_duration(time.time() - watcher.started_at) if watcher.started_at else "",
+                "resume_page": pending_resume(c)}
 
     @app.get("/scrape")
     def scrape_form(request: Request):
@@ -703,6 +824,100 @@ def create_app(scheduler: bool = False) -> FastAPI:
         with core.connect() as c:
             ctx = scrape_context(c)
         return tpl.TemplateResponse(request, "_watches.html", ctx)
+
+    RESUME_KEY = "unfinished_run"     # a manual run that was going when the app stopped (restart, deploy, power cut)
+    RESUME_TRIES = 3                  # give up after this many restarts without getting past the same page
+
+    def start_manual(spec: dict, resumed: dict | None = None) -> str:
+        """Start a manual scrape from its settings (the Scrape form, or a saved unfinished run). Returns the job id.
+        While it runs, its settings and current listing page are saved, so a restart can continue it."""
+        if not watcher.scrape_lock.acquire(blocking=False):
+            raise HTTPException(409, f"Busy: {watcher.current or 'a scrape'} is still running. Try again when it finishes (see the Scrape page).")
+        url, single = spec["url"], spec["single"]
+        state = dict(resumed or {"spec": spec, "started": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), "resumes": 0})
+        state["page"] = spec["start_page"]
+        stop_text = spec["stop_text"] + (f" · starting at listing page {spec['start_page']}" if spec["start_page"] > 1 else "")
+        stop_event = threading.Event()
+        opt = scraper.Options(keywords=spec["keywords"], limit=spec["limit"], card=spec["card"], title=spec["title"],
+                              tag=spec["tag"], media=spec["media"], date=spec["date"], until=spec["until"],
+                              cancel=stop_event, single=single, start_page=spec["start_page"])
+        jid = uuid.uuid4().hex[:8]
+        job = jobs[jid] = {"url": url, "keywords": spec["keywords"] or ["(single post: no keyword filter)"],
+                           "log": scraper.RunLog(watcher.MAX_LOG_LINES), "running": True, "stats": None,
+                           "heading": "Scrape (resumed after a restart)" if resumed else "Scrape",
+                           "stop_text": stop_text, "stop_url": f"/scrape/{jid}/stop", "cancel": stop_event}
+
+        def save_state(value):
+            with core.connect() as c:
+                if value is None:
+                    c.execute("DELETE FROM settings WHERE key=?", (RESUME_KEY,))
+                else:
+                    core.set_setting(c, RESUME_KEY, json.dumps(value))
+
+        def log(line):
+            job["log"].append(line)
+            if not single and job["log"].page and job["log"].page != state["page"]:
+                state["page"] = job["log"].page
+                try:
+                    save_state(state)
+                except Exception:
+                    pass                  # a busy database only delays the bookmark of the page
+
+        def work():
+            watcher.current, watcher.current_jid = f"manual scrape of {url}", jid
+            watcher.started_at = job["log"].started
+            try:
+                if not single:
+                    save_state(state)
+                if resumed:
+                    log(f"Resumed after a restart, from page {spec['start_page']}")
+                with core.connect() as c:
+                    run = scraper.scrape_single if single else scraper.scrape
+                    job["stats"] = run(c, url, opt, log=log)
+            except Exception as e:  # surface any failure in the page instead of dying silently
+                job["log"].append(f"Failed: {e}")
+            finally:
+                # the run ended on its own (or was stopped): nothing to continue. A crash or restart never gets here.
+                try:
+                    save_state(None)
+                except Exception:
+                    pass
+                job["log"].finished = time.time()
+                job["running"] = False
+                watcher.current = watcher.current_jid = watcher.started_at = None
+                watcher.scrape_lock.release()
+
+        threading.Thread(target=work, daemon=True).start()
+        return jid
+
+    def resume_unfinished(delay: float = 60.0):   # gives the network time to come back after a power cut
+        """At start-up: continue a manual run that the last shutdown cut off, from the listing page it had reached."""
+        time.sleep(delay)
+        with core.connect() as c:
+            raw = core.get_setting(c, RESUME_KEY)
+            if not raw:
+                return
+            try:
+                state = json.loads(raw)
+                spec = dict(state["spec"])
+            except (ValueError, KeyError, TypeError):
+                c.execute("DELETE FROM settings WHERE key=?", (RESUME_KEY,))
+                return
+            page = max(1, int(state.get("page") or spec["start_page"]))
+            tries = state.get("resumes", 0) + 1 if page == state.get("last_resume_page") else 1
+            if tries > RESUME_TRIES:
+                c.execute("DELETE FROM settings WHERE key=?", (RESUME_KEY,))
+                print(f"Not resuming the unfinished scrape: it stopped at page {page} {RESUME_TRIES} times in a row.")
+                return
+            if not spec["until"]:      # 'stop after N posts': only the ones still missing
+                done = c.execute("SELECT COUNT(*) FROM posts WHERE created >= ?", (state["started"],)).fetchone()[0]
+                spec["limit"] = max(1, spec["limit"] - done)
+        spec["start_page"] = page
+        state.update(resumes=tries, last_resume_page=page)
+        try:
+            start_manual(spec, resumed=state)
+        except HTTPException:
+            pass                          # something else is scraping; the saved run stays for the next start-up
 
     @app.post("/scrape")
     def scrape_start(url: str = Form(...), keywords: str = Form(""),
@@ -717,36 +932,14 @@ def create_app(scheduler: bool = False) -> FastAPI:
         if not url.startswith(("http://", "https://")):
             raise HTTPException(400, "URL must start with http:// or https://")
         n, until_iso, stop_text = read_stop(stop_mode, limit, until) if not single else (1, "", "after this one post")
-        start_page = 1 if single else max(1, min(start_page, 1_000_000))
-        if start_page > 1:
-            stop_text += f" · starting at listing page {start_page}"
-        if not watcher.scrape_lock.acquire(blocking=False):
-            raise HTTPException(409, f"Busy: {watcher.current or 'a scrape'} is still running. Try again when it finishes (see the Scrape page).")
-        stop_event = threading.Event()
-        opt = scraper.Options(keywords=kws, limit=n,
-                              card=card.strip(), title=title.strip(), tag=tag.strip(), media=media.strip(),
-                              date=date.strip(), until=until_iso, cancel=stop_event, single=single, start_page=start_page)
-        jid = uuid.uuid4().hex[:8]
-        job = jobs[jid] = {"url": url, "keywords": kws or ["(single post: no keyword filter)"], "log": scraper.RunLog(watcher.MAX_LOG_LINES), "running": True, "stats": None, "heading": "Scrape",
-                           "stop_text": stop_text, "stop_url": f"/scrape/{jid}/stop", "cancel": stop_event}
+        spec = {"url": url, "keywords": kws, "single": single, "limit": n, "until": until_iso, "stop_text": stop_text,
+                "card": card.strip(), "title": title.strip(), "tag": tag.strip(), "media": media.strip(), "date": date.strip(),
+                "start_page": 1 if single else max(1, min(start_page, 1_000_000))}
+        return RedirectResponse(f"/scrape/{start_manual(spec)}", 303)
 
-        def work():
-            watcher.current, watcher.current_jid = f"manual scrape of {url}", jid
-            watcher.started_at = job["log"].started
-            try:
-                with core.connect() as c:
-                    run = scraper.scrape_single if single else scraper.scrape
-                    job["stats"] = run(c, url, opt, log=job["log"].append)
-            except Exception as e:  # surface any failure in the page instead of dying silently
-                job["log"].append(f"Failed: {e}")
-            finally:
-                job["log"].finished = time.time()
-                job["running"] = False
-                watcher.current = watcher.current_jid = watcher.started_at = None
-                watcher.scrape_lock.release()
-
-        threading.Thread(target=work, daemon=True).start()
-        return RedirectResponse(f"/scrape/{jid}", 303)
+    app.state.resume_unfinished = resume_unfinished   # (tests call it directly)
+    if scheduler:
+        threading.Thread(target=resume_unfinished, daemon=True, name="minibooru-resume").start()
 
     @app.post("/scrape/{jid}/stop")
     def scrape_stop(jid: str, next: str = Form("")):

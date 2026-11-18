@@ -1,6 +1,7 @@
 {% extends "base.html" %}{% block body %}
 <div class="gbar"><span class="gcount">{{ total }} post{{ '' if total == 1 else 's' }}{% if q %} <span class="mut">for “{{ q }}”</span>{% endif %}</span><button type="button" id="up-open">＋ Upload</button></div>
 {% set sort_action = '/' %}{% include "_sort.html" %}
+{% if view == 'dups' and total %}<p class="note">⚖ <a href="/dups/review"><b>Review them one pair at a time</b></a>: side by side, keep one with a key press.</p>{% endif %}
 {% include "_grid.html" %}
 {% include "_pager.html" %}
 <dialog id="updlg"><div class="in">

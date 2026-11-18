@@ -8,6 +8,7 @@
 {% if job.running %}<script>setTimeout(()=>location.reload(),2000)</script>{% else %}<p><a href="/">View posts →</a> · <a href="/scrape">Back to Scrape</a></p>{% endif %}
 {% else %}
 <h2>Scrape a page</h2>
+{% if resume_page %}<p class="note">⟳ A run that was cut off by a restart continues by itself from <b>page {{ resume_page }}</b> within a minute. No need to start it again.</p>{% endif %}
 <p class="lead">Paste a URL and keywords, then press <b>Start scrape now</b> or set up an <b>Auto rescan</b>. Site needs a login? Use the <a href="/clip/bookmarklet"><b>Save to {{ brand.name }}</b> bookmark</a> on each post instead.</p>
 <details class="howto"><summary>How it works</summary>
 <p class="note">It checks titles across as many listing pages as needed (following /page/2/, /page/3/…). Only posts whose <b>title</b> matches a keyword are imported, with their tags, title and media. Tags get types by their position on the post (first, in between, last) if you set that up under <a href="/tags#types">Tag types</a>. robots.txt is obeyed.<br>

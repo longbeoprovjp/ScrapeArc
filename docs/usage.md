@@ -18,16 +18,21 @@ screen; add a background picture in Customize if you like.
   - `type:video` or `type:image` shows only videos or only pictures.
   - `title:word` matches a word in the title.
   - Example: `tag1 tag2 -tag3 type:video`
-- **Filter by**: everything, favorites, pictures, videos, or posts flagged as possible duplicates.
-- **Show**: everything, only your uploads, or only scraped posts.
-- **Sort**: newest or oldest first, by the date the post was made on the original site (the import time if the site
+- **Filter buttons** under the post count: all posts, videos, images, favorites (all, videos or pictures only),
+  possible duplicates, and posts saved with the bookmark. On a phone, swipe the row sideways.
+- **Everything / Uploads / Not uploads** narrows it to your own uploads or to scraped posts.
+- **Newest / Oldest first** sorts by the date the post was made on the original site (the import time if the site
   gave none).
-- Posts with several files show a count badge.
+- **Per row** sets how many posts fit in a row (Auto, 4, 6 or 8 on a computer; Auto, 1, 2 or 4 on a phone).
+- **Select posts** lets you tick posts and delete them together.
+- Posts with several files show a count badge, and favorites a ★.
 
 ## Uploading
 
-Open **Upload** at the top of the gallery, pick files, and type tags separated by spaces. Tick **as one post** to put
-all the files in a single post; otherwise each file becomes its own post. Pictures and videos are accepted (not iPhone
+![Uploading](screenshots/upload.jpg)
+
+Press **＋ Upload** at the top of the gallery, then choose files or drop them on the box, and type tags separated by
+spaces. Tick **put all the files in one post** to keep them together; otherwise each file becomes its own post. Pictures and videos are accepted (not iPhone
 HEIC: export those as JPEG).
 
 ## A post
@@ -42,7 +47,10 @@ HEIC: export those as JPEG).
 - **Set as Background**: choose a picture, crop it to a desktop or phone shape, and save.
 - **Possible duplicates**: if another post looks like the same picture, the post page says so. Choose **Keep both**,
   **merge** (moves the tags over and deletes this one), or delete the other.
-- Use the arrow keys or the arrows on the page to move to the previous or next post in the same search.
+- **← Prev / Next →** (or the arrow keys) move through the same list you opened the post from: the same search,
+  filter and sort. **▦ List** goes back to that list, scrolled to where you were.
+- **Delete post** shows the next post in the list straight away. Back still takes you to your list, not to the deleted
+  post. The duplicate buttons work the same way: one Back returns to the list.
 
 ## The Tags page
 
@@ -76,9 +84,11 @@ for you. Leave all three on *other* if your sites have no such order.
 
 ![Customize](screenshots/customize.jpg)
 
-Open **Customize** from the header:
+Open **Customize** from the header (on a phone it's in the ☰ menu):
 
 - **Name and icon** of the app.
+- **Tags under posts**: show or hide the tag chips under each post on the front page, separately for computers and
+  phones. By default they show on computers and are hidden on phones.
 - **Backgrounds**: one for desktops and one for phones, cropped to the right shape. They're stored on the server, so
   every device you use gets them. **✕** removes one.
 - **Customize screen →** opens a page for everything about how the app looks, with a live preview:
@@ -87,12 +97,25 @@ Open **Customize** from the header:
   - **Colours for every kind of box**: page, header, cards, info boxes, input boxes, main and other buttons, links
     and dates. Each text colour shows how readable it is on its box (aim for 4.5:1). Click a box in the preview to
     jump to its colours.
-  - **Layout**: how much the background picture fades, corner roundness, thumbnail size and outlines around posts.
+  - **Layout**: how much the background picture fades, corner roundness, thumbnail size, outlines around posts and
+    tags under posts.
 
   Colours and layout are saved in that browser, so each device can look different.
 
+## On a phone
+
+<p align="center">
+  <img src="screenshots/phone.jpg" width="30%" alt="The gallery on a phone">
+  <img src="screenshots/phone-menu.jpg" width="30%" alt="The menu">
+  <img src="screenshots/phone-post.jpg" width="30%" alt="A post on a phone">
+</p>
+
+- The header is one row: 🔍 opens the search box and ☰ opens the menu (Gallery, Scrape, Tags, Customize, Log out).
+- **Add it to your Home Screen** to use it like an app: full screen, with its own icon. On an iPhone or iPad the app
+  shows the steps once (Share → Add to Home Screen). In the home-screen app, **‹** goes back and **↻** reloads.
+- The home-screen app **reopens where you left off**: the last post or list you had open on that device.
+
 ## Tips
 
-- On a phone, add the app to your home screen (Share → Add to Home Screen) to get its icon.
 - Everything (posts, tags, history, backgrounds, name, icon) lives in the data folder; back it up (see
   [install.md](install.md#6-backups)).

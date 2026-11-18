@@ -1,0 +1,51 @@
+{% extends "base.html" %}{% block title %}Review duplicates · {{ brand.name }}{% endblock %}{% block body %}
+<div class="dhead"><h2>Review duplicates</h2>
+<span class="mut">{% if total %}Pair {{ skip + 1 }} of {{ total }}{% endif %}</span>
+<a href="/?view=dups" class="mut" style="margin-left:auto">See them as a list →</a></div>
+{% if not sides %}
+<div class="empty"><b>No possible duplicates left</b>Every flagged pair has been sorted out. New ones are flagged as posts come in.</div>
+{% else %}
+<p class="mut dkeys">Pick the one to keep: the other is deleted and its tags move over. Keys: <kbd>←</kbd> keep left · <kbd>→</kbd> keep right · <kbd>B</kbd> keep both · <kbd>S</kbd> skip</p>
+<div class="dpair">{% for s in sides %}{% set p = s.p %}
+<div class="dside{{ ' hint' if hint == loop.index0 }}">
+<a href="/post/{{ p.id }}" target="_blank" rel="noopener" class="dmain" title="Open the post in a new tab">
+{% set f = s.files[0] %}{% if f.is_image %}<img src="{{ f.url }}" alt="">{% else %}<img src="{{ f.thumb }}" alt=""><span class="badge">▶ video</span>{% endif %}</a>
+{% if s.files|length > 1 %}<div class="dthumbs">{% for f in s.files[1:7] %}<img src="{{ f.thumb }}" alt="" loading="lazy">{% endfor %}{% if s.files|length > 7 %}<span class="mut">+{{ s.files|length - 7 }}</span>{% endif %}</div>{% endif %}
+<div class="dinfo">
+<div><b>#{{ p.id }} {{ p.title or 'Untitled' }}</b>{% if p.favorite %} ★{% endif %}{% if hint == loop.index0 %} <span class="dsug">suggested</span>{% endif %}</div>
+<div class="mut">{{ p.width }}×{{ p.height }} · {{ s.files|length }} file{{ '' if s.files|length == 1 else 's' }} · {{ s.tags|length }} tag{{ '' if s.tags|length == 1 else 's' }}{% if s.host %} · {{ s.host }}{% endif %}</div>
+<div class="mut">{{ (p.posted or p.created)[:10] }}</div>
+<div class="chips">{% for t in s.tags[:10] %}<span class="chip" style="--c:{{ t.color }}">{{ t.name }}</span>{% endfor %}{% if s.tags|length > 10 %}<span class="chip more">+{{ s.tags|length - 10 }}</span>{% endif %}</div>
+</div>
+<button type="button" class="dkeep" data-act="{{ 'left' if loop.first else 'right' }}">{{ '← ' if loop.first }}Keep this one{{ ' →' if loop.last }}</button>
+</div>{% endfor %}</div>
+<div class="row dbtns"><button type="button" class="ghost" data-act="both">Keep both <kbd>B</kbd></button><button type="button" class="ghost" data-act="skip">Skip for now <kbd>S</kbd></button><span class="mut" id="dmsg"></span></div>
+<script>
+(function(){const A={{ sides[0].p.id }},Bid={{ sides[1].p.id }},skip={{ skip }},msg=document.getElementById('dmsg');let busy=false;
+const go=s=>location.replace('/dups/review'+(s?'?skip='+s:''));
+async function act(k){if(busy)return;if(k==='skip')return go(skip+1);busy=true;msg.textContent='Saving…';
+const url=k==='both'?'/post/'+A+'/dup/'+Bid+'/dismiss':k==='left'?'/post/'+Bid+'/dup/'+A+'/merge':'/post/'+A+'/dup/'+Bid+'/merge';
+try{const r=await fetch(url,{method:'POST',credentials:'same-origin'});if(!r.ok)throw new Error('HTTP '+r.status);
+try{sessionStorage.setItem('mb-stale','1')}catch(x){}go(skip)}catch(e){busy=false;msg.textContent='Could not save: '+e.message}}
+document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>act(b.dataset.act));
+document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,select')||e.ctrlKey||e.metaKey||e.altKey)return;
+const k={ArrowLeft:'left',ArrowRight:'right',b:'both',B:'both',s:'skip',S:'skip'}[e.key];if(k){e.preventDefault();act(k)}});
+})();
+</script>
+{% endif %}
+<style>
+.dhead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.dpair{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:10px 0}
+.dside{background:var(--card);border-radius:var(--radius);padding:10px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:8px;border:2px solid transparent;min-width:0}
+.dside.hint{border-color:color-mix(in srgb,var(--acc) 60%,transparent)}
+.dmain{display:block;position:relative;background:color-mix(in srgb,var(--fg) 6%,transparent);border-radius:calc(var(--radius) - 4px);overflow:hidden}
+.dmain img{display:block;width:100%;height:min(56vh,620px);object-fit:contain}
+.dthumbs{display:flex;gap:4px;flex-wrap:wrap;align-items:center}.dthumbs img{width:44px;height:44px;object-fit:cover;border-radius:6px}
+.dinfo{display:flex;flex-direction:column;gap:2px;min-width:0}.dinfo b{overflow-wrap:anywhere}
+.dsug{font-size:12px;font-weight:600;color:var(--btnfg);background:var(--btn);border-radius:999px;padding:1px 8px}
+.dkeep{margin-top:auto}
+kbd{font:600 12px ui-monospace,monospace;padding:1px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;background:var(--card);color:var(--fg)}
+.dbtns{justify-content:center}
+@media(max-width:600px){.dpair{gap:8px}.dside{padding:6px}.dmain img{height:38vh}.dkeys{display:none}.dinfo{font-size:13px}}
+</style>
+{% endblock %}
