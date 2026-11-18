@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The image now uses Python 3.15 (was 3.12) and FastAPI 0.163.1; build tooling updated.
+
 ## 1.0.0
 
 The first release.

@@ -11,7 +11,7 @@ thrown away at any time; the data folder can't. Everything you care about lives 
 
 | File in the project | What it is |
 |---|---|
-| `Dockerfile` | Recipe for the image: Python 3.12 on Debian, plus ffmpeg and the app |
+| `Dockerfile` | Recipe for the image: Python 3.15 on Debian, plus ffmpeg and the app |
 | `docker-compose.minibooru.yml` | How to run it: port, data folder, restart policy, user id |
 | `.env.minibooru.example` | Settings template (copy it to `.env.minibooru`) |
 | `healthcheck.py` | Lets Docker tell whether the server is alive |
