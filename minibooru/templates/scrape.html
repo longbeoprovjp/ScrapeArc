@@ -2,15 +2,17 @@
 {% if job %}
 <h2>{{ job.heading or 'Scrape' }} {{ 'running…' if job.running else 'finished' }}</h2>
 <p class="note" style="word-break:break-all">{{ job.url }}<br>keywords: {{ job.keywords|join(', ') }}{% if job.stop_text %}<br>stops: {{ job.stop_text }}{% endif %}</p>
-{% if job.log.started %}<p class="note">{{ 'Running for' if job.running else 'Took' }} <b>{{ job.log.took() }}</b>{% if job.log.dropped %} · log shows the last {{ job.log|length }} lines ({{ job.log.dropped }} earlier lines not kept; the totals at the end count everything){% endif %}</p>{% endif %}
+{% if job.log.started %}<p class="note">{% if job.log.page %}{{ 'Current page' if job.running else 'Last page' }} <b>#{{ job.log.page }}</b> · {% endif %}{{ 'Running for' if job.running else 'Took' }} <b>{{ job.log.took() }}</b>{% if job.log.dropped %} · log shows the last {{ job.log|length }} lines ({{ job.log.dropped }} earlier lines not kept; the totals at the end count everything){% endif %}</p>{% endif %}
 {% if job.running and job.stop_url %}<form method="post" action="{{ job.stop_url }}" style="margin:0 0 10px"><button class="danger">Stop</button></form>{% endif %}
 <pre id="log" style="background:var(--card);padding:12px;border-radius:8px;white-space:pre-wrap;max-height:65vh;overflow:auto">{{ job.log|join('\n') }}</pre>
 {% if job.running %}<script>setTimeout(()=>location.reload(),2000)</script>{% else %}<p><a href="/">View posts →</a> · <a href="/scrape">Back to Scrape</a></p>{% endif %}
 {% else %}
 <h2>Scrape a page</h2>
-<p class="note">Site needs a login? Use the <a href="/clip/bookmarklet"><b>Save to {{ brand.name }}</b> bookmark</a> on each post instead (your browser downloads with your own login; nothing crawls the site).</p>
-<p class="note">Enter a listing-page URL and keywords. It checks titles across as many listing pages as needed (following /page/2/, /page/3/…). Only posts whose <b>title</b> matches a keyword are imported, with their tags, title and media. Tags get types by their position on the post (first, in between, last) if you set that up under <a href="/tags#types">Tag types</a>. robots.txt is obeyed.<br>
+<p class="lead">Paste a URL and keywords, then press <b>Start scrape now</b> or set up an <b>Auto rescan</b>. Site needs a login? Use the <a href="/clip/bookmarklet"><b>Save to {{ brand.name }}</b> bookmark</a> on each post instead.</p>
+<details class="howto"><summary>How it works</summary>
+<p class="note">It checks titles across as many listing pages as needed (following /page/2/, /page/3/…). Only posts whose <b>title</b> matches a keyword are imported, with their tags, title and media. Tags get types by their position on the post (first, in between, last) if you set that up under <a href="/tags#types">Tag types</a>. robots.txt is obeyed.<br>
 Then choose <b>Run once</b> (one scrape now) or <b>Auto rescan</b> (repeats on a timer) below. Each has its own Start button.</p>
+</details>
 <form action="/scrape" method="post">
 <div class="row" id="urlkind"><b>This URL is</b>
 <label><input type="radio" name="url_kind" value="listing" checked> a listing page <span class="mut">(many posts, filtered by keywords)</span></label>
@@ -23,7 +25,7 @@ Then choose <b>Run once</b> (one scrape now) or <b>Auto rescan</b> (repeats on a
 
 <div class="modebox" id="oncebox"><h3>Run once <span class="mut">scrapes now, one time</span></h3>
 <div class="row" id="startrow"><label><b>Start at page</b> <input name="start_page" type="number" value="1" min="1" style="width:100px"></label></div>
-<p class="note">Start at page: 1 = the URL itself. To resume a long run, use the last “Listing page N” from its log (a few pages lower is safer).</p>
+<p class="note">Start at page: 1 = the URL itself. To resume a long run, use the <b>Current page</b> shown on its run page (a few pages lower is safer).</p>
 <div class="row stopmode" id="stoprow"><b>Stop</b>
 <label><input type="radio" class="mode" name="stop_mode" value="count" checked> after importing <input data-for="count" name="limit" type="number" value="20" min="1" max="5000" style="width:80px"> posts</label>
 <span class="mut">or</span>
@@ -41,7 +43,7 @@ Then choose <b>Run once</b> (one scrape now) or <b>Auto rescan</b> (repeats on a
 </form>
 <div id="watches-box">{% include "_watches.html" %}</div>
 <style>.modebox{background:var(--card);padding:12px 14px;border-radius:var(--radius);box-shadow:var(--shadow);margin:12px 0;border-left:4px solid var(--acc)}
-.modebox h3{margin:0 0 6px}.modebox h3 .mut{font-size:13px;font-weight:500}.modebox .note{margin:6px 0}
+.modebox h3{margin:0 0 6px}.lead{margin:0 0 10px;color:var(--fg);background:var(--card);padding:10px 14px;border-radius:var(--radius);box-shadow:var(--shadow)}.howto .note{margin:6px 0 2px}.modebox .note{font-size:13.5px}.modebox h3 .mut{font-size:13px;font-weight:500}.modebox .note{margin:6px 0}
 .busybar{display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--card);padding:10px 14px;border-radius:var(--radius);border:1px solid var(--acc);margin:12px 0}.busybar[data-href]{cursor:pointer}.busybar[data-href]:hover{background:color-mix(in srgb,var(--acc) 8%,var(--card))}
 .st.run{color:var(--acc)}.wtable td{vertical-align:top}input:disabled{opacity:.4}</style>
 <script>

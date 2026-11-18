@@ -48,9 +48,13 @@ class RunLog(list):
         super().__init__()
         self.cap, self.dropped = cap, 0
         self.started, self.finished = time.time(), None
+        self.page = None           # listing page being read now (shown on the run page)
 
     def append(self, line):
         super().append(line)
+        m = re.match(r"(?:Listing page|Scraping from page) (\d+)", str(line))
+        if m:
+            self.page = int(m.group(1))
         if len(self) > self.cap:
             n = len(self) - self.cap
             del self[:n]
@@ -674,7 +678,7 @@ def scrape(c, url: str, opt: Options, log=print) -> dict:
         first = max(1, opt.start_page)
         if first > 1:
             page_url = listing_page_url(url, first)
-            log(f"Starting at listing page {first}, as you asked: {page_url}")
+            log(f"Scraping from page {first}")
         for page_no in range(first, first + opt.pages):
             if stats["new"] + stats["duplicate"] >= opt.limit:
                 log(f"Reached the limit of {opt.limit} imported posts: stopping.")

@@ -37,6 +37,7 @@
     <div class="cs-row"><span>Fade the background picture</span><input type="range" id="l-dim" min="0" max="0.8" step="0.05"><button class="ghost" type="button" data-reset="dim" title="Back to default">↺</button></div>
     <div class="cs-row"><span>Corner roundness</span><input type="range" id="l-radius" min="0" max="24" step="1"><button class="ghost" type="button" data-reset="radius" title="Back to default">↺</button></div>
     <div class="cs-row"><span>Thumbnail size (when Per row is Auto)</span><input type="range" id="l-thumb" min="110" max="320" step="10"><button class="ghost" type="button" data-reset="thumb" title="Back to default">↺</button></div>
+    <div class="cs-row"><span>Tags under posts</span><label class="mut"><input type="checkbox" id="l-tagsd"> Computer</label><label class="mut"><input type="checkbox" id="l-tagsm"> Phone</label></div>
     <div class="cs-row"><span>Outline around posts</span><input type="checkbox" id="l-pout"><input type="color" id="l-poutc" title="Outline colour"><select id="l-poutw" title="Thickness"><option value="1px">Thin</option><option value="2px">Medium</option><option value="4px">Thick</option></select></div>
   </section>
   <div class="row" style="justify-content:space-between"><button class="ghost danger" type="button" id="cs-reset">Reset everything</button><a href="/"><button type="button">Done</button></a></div>
@@ -82,7 +83,9 @@ function buildColors(){const host=$('cs-colors');host.innerHTML='';
 const num=(k,d)=>{const v=T.get(k);return v!==undefined?v:(parseFloat(T.raw(k))||d)};
 function syncLayout(){$('l-dim').value=num('dim',0);$('l-radius').value=num('radius',12);$('l-thumb').value=num('thumb',180);
  $('l-pout').checked=!!T.get('pout');$('l-poutc').value=T.get('pout')||(T.hex6(T.raw('acc'))?T.raw('acc'):'#5a67f2');$('l-poutw').value=T.get('poutw')||'2px';
- $('l-poutc').disabled=$('l-poutw').disabled=!T.get('pout')}
+ $('l-poutc').disabled=$('l-poutw').disabled=!T.get('pout');
+ $('l-tagsd').checked=T.get('tagsd')!=='off';$('l-tagsm').checked=T.get('tagsm')==='on'}
+$('l-tagsd').onchange=()=>T.set('tagsd',$('l-tagsd').checked?null:'off');$('l-tagsm').onchange=()=>T.set('tagsm',$('l-tagsm').checked?'on':null);
 for(const k of ['dim','radius','thumb'])$('l-'+k).oninput=e=>T.set(k,e.target.value);
 document.querySelectorAll('[data-reset]').forEach(b=>b.onclick=()=>{T.set(b.dataset.reset,null);syncLayout()});
 const outline=()=>{if($('l-pout').checked){T.set('pout',$('l-poutc').value);T.set('poutw',$('l-poutw').value)}else{T.set('pout',null);T.set('poutw',null)}syncLayout()};

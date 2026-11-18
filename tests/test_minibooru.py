@@ -614,7 +614,7 @@ def test_info_boxes_and_date_colors(env, tmp_path, monkeypatch):
     scrape = cl.get("/scrape").text
     assert scrape.count("▶ Start scrape now") == 1 and scrape.count("▶ Start auto rescan") >= 1
     assert scrape.index('id="oncebox"') < scrape.index("▶ Start scrape now") < scrape.index('id="autobox"') < scrape.index('id="autostart"')
-    assert scrape.count('class="note"') >= 6 and '<p class="mut">' not in scrape
+    assert scrape.count('class="note"') >= 5 and '<details class="howto">' in scrape and '<p class="mut">' not in scrape
 
 
 def test_grid_has_posts_per_row_picker_and_outline_option(env, monkeypatch):
@@ -655,3 +655,47 @@ def test_customize_has_a_colour_for_every_kind_of_box(env, monkeypatch):
     assert screen.status_code == 200
     for bit in ('id="setups"', 'id="cs-colors"', 'id="l-pout"', 'id="l-radius"', 'class="pv"', 'data-g="Header"', "Customize screen"):
         assert bit in screen.text
+
+
+def test_tags_under_posts_shown_on_computers_hidden_on_phones(env, monkeypatch):
+    from fastapi.testclient import TestClient
+    from minibooru.web import create_app
+    monkeypatch.delenv("MINIBOORU_PASSWORD", raising=False)
+    page = TestClient(create_app()).get("/").text
+    assert "@media(max-width:760px){.grid .chips{display:none}html[data-tagsm=on] .grid .chips{display:flex}}" in page
+    assert "html[data-tagsd=off] .grid .chips{display:none}" in page
+    assert 'id="tg-d"' in page and 'id="tg-m"' in page                      # switches in the Customize popup
+    assert "'tagsd','tagsm']" in page                                        # applied before first paint
+
+
+def test_post_page_delete_goes_to_next_post_and_list_link_keeps_filters(env, monkeypatch):
+    from fastapi.testclient import TestClient
+    from minibooru.web import create_app
+    monkeypatch.delenv("MINIBOORU_PASSWORD", raising=False)
+    with core.connect() as c:
+        ids = [c.execute("INSERT INTO posts(sha256, ext, mime) VALUES (?, 'png', 'image/png')", (f"n{i}",)).lastrowid for i in range(3)]
+    cl = TestClient(create_app())
+    page = cl.get(f"/post/{ids[1]}?view=images&sort=old").text
+    assert f'data-after="/post/{ids[2]}?sort=old&amp;view=images"' in page             # deleting shows the next post
+    assert 'id="nav-list" href="/?sort=old&amp;view=images"' in page or 'href="/?sort=old&amp;view=images" id="nav-list"' in page
+    last = cl.get(f"/post/{ids[2]}?view=images&sort=old").text
+    assert f'data-after="/post/{ids[1]}?sort=old&amp;view=images"' in last             # the last one goes to the previous
+    assert 'localStorage.getItem("mb-last")' in page and "location.replace(last.url)" in page   # app reopens where you left it
+
+
+def test_list_filters_have_indexes(env):
+    with core.connect() as c:
+        names = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='index'")}
+    assert {"idx_dup_flags_b", "idx_scraped_post", "idx_posts_when"} <= names
+    assert "p.id IN (SELECT" in core.DUP_SQL and "p.id IN (SELECT" in core.BOOKMARK_SQL   # worked out once, not per post
+
+
+def test_duplicate_actions_update_the_post_page_in_place(env, monkeypatch):
+    from fastapi.testclient import TestClient
+    from minibooru.web import create_app
+    monkeypatch.delenv("MINIBOORU_PASSWORD", raising=False)
+    with core.connect() as c:
+        a, b = (c.execute("INSERT INTO posts(sha256, ext, mime) VALUES (?, 'png', 'image/png')", (s,)).lastrowid for s in ("d1", "d2"))
+        c.execute("INSERT INTO dup_flags(a, b, dist) VALUES (?, ?, 2)", (a, b))
+    page = TestClient(create_app()).get(f"/post/{a}?view=dups").text
+    assert page.count('<form class="inplace"') == 3 and "location.replace(to)" in page   # no extra Back step

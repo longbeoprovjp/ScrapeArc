@@ -4,10 +4,13 @@
 {% set bgv = bg_versions() %}<style id="bgcss">/* backgrounds are stored on the server: one for desktops, one for phones (narrow screens) */
 :root{--bgimg:{% if bgv.desktop %}url("/background/desktop?v={{ bgv.desktop }}"){% else %}none{% endif %}}
 @media (max-width:760px){:root{--bgimg:{% if bgv.mobile %}url("/background/mobile?v={{ bgv.mobile }}"){% else %}none{% endif %}}}</style>
-<script>const MBK={{ brand.theme_key|tojson }};</script><script>if(navigator.standalone)document.documentElement.classList.add("standalone")</script><script>/* apply saved colors before first paint (no flash). Stored per browser in localStorage; the background image is not. */
+<script>const MBK={{ brand.theme_key|tojson }};</script><script>if(navigator.standalone)document.documentElement.classList.add("standalone")</script><script>/* the home-screen app opens where you left it: the last post or list viewed on this device */
+try{const fresh=!sessionStorage.getItem("mb-open");sessionStorage.setItem("mb-open","1");
+const app=navigator.standalone||matchMedia("(display-mode: standalone)").matches,last=JSON.parse(localStorage.getItem("mb-last")||"null");
+if(fresh&&app&&location.pathname==="/"&&!location.search&&last&&last.url&&last.url!=="/"&&last.url.charAt(0)==="/"&&last.url.charAt(1)!=="/")location.replace(last.url)}catch(e){}</script><script>/* apply saved colors before first paint (no flash). Stored per browser in localStorage; the background image is not. */
 try{const s=JSON.parse(localStorage.getItem(MBK)||'{}'),r=document.documentElement.style;
 for(const[k,v]of Object.entries(s)){if(k==='bgimg')continue;r.setProperty('--'+k,(k==='radius'||k==='thumb')&&/^[0-9.]+$/.test(v)?v+'px':v)}
-if(s.colsd)document.documentElement.dataset.colsd=s.colsd;if(s.colsm)document.documentElement.dataset.colsm=s.colsm;
+for(const k of ['colsd','colsm','tagsd','tagsm'])if(s[k])document.documentElement.dataset[k]=s[k];
 /* a background saved the old way (in this browser only) moves to the server once, for this kind of device, if that slot is empty */
 if(s.bgimg){const slot=matchMedia('(max-width:760px)').matches?'mobile':'desktop',have={{ bgv|tojson }};
  if(have[slot]){delete s.bgimg;localStorage.setItem(MBK,JSON.stringify(s))}
@@ -68,6 +71,9 @@ h2,h3{margin:.5em 0 .4em;letter-spacing:-.015em}h2{font-size:24px}h3{font-size:1
 @media(min-width:761px){html[data-colsd] .grid{grid-template-columns:repeat(var(--colsd),minmax(0,1fr))}.gp-phone{display:none!important}}
 @media(max-width:760px){html[data-colsm] .grid{grid-template-columns:repeat(var(--colsm),minmax(0,1fr))}.gp-desk{display:none!important}}
 html[data-colsm="1"] .grid .cap{opacity:1;transform:none}
+/* tags under each post: shown on computers, hidden on phones; either can be switched in Customize */
+@media(min-width:761px){html[data-tagsd=off] .grid .chips{display:none}}
+@media(max-width:760px){.grid .chips{display:none}html[data-tagsm=on] .grid .chips{display:flex}}
 .gridpick{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:999px;background:var(--card);box-shadow:var(--shadow)}
 .gridpick .mut{padding:0 6px 0 8px;font-size:13px}
 .gridpick button{padding:4px 11px;border-radius:999px;font-size:13px;background:none;color:var(--fg);border:0;box-shadow:none}
@@ -149,9 +155,68 @@ main{padding-bottom:calc(40px + env(safe-area-inset-bottom))}
 .appnav{display:none;gap:2px}.appnav button{background:none;color:var(--headfg);border:0;font-size:20px;line-height:1;padding:4px 9px;border-radius:999px}
 .appnav button:hover{background:var(--line);filter:none}
 @media (display-mode: standalone){.appnav{display:inline-flex}}html.standalone .appnav{display:inline-flex}
+
+/* ---- phones: one header row (name, search button, menu button); search and menu open below it ---- */
+.hphone{display:none;gap:2px;margin-left:auto}
+.hbtn{background:none;border:0;color:var(--headfg);padding:7px;border-radius:999px;display:inline-flex;line-height:0}
+.hbtn svg{width:22px;height:22px}.hbtn:hover,.hbtn[aria-expanded=true]{background:var(--line);filter:none}
+header nav a[href="/"]{display:none}
+header .brand{min-width:0}header .brand span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:600px){
+ header{gap:8px;flex-wrap:wrap}header .brand{font-size:17px}header .brand img{width:30px;height:30px;border-radius:9px}
+ .hphone{display:inline-flex}
+ header form.hsearch{display:none}header.search-open form.hsearch{display:flex}
+ header nav{display:none;order:4;flex-basis:100%;flex-direction:column;align-items:stretch;gap:2px;margin:0;padding:6px 0 2px;border-top:1px solid var(--line)}
+ header.menu-open nav{display:flex}header nav a[href="/"]{display:block}
+ header nav a,header nav button{padding:11px 12px;font-size:16px;text-align:left;border-radius:10px;width:100%}
+}
+/* ---- gallery: count + upload, filter chips, compact selects ---- */
+.gbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}
+.gcount{font-weight:600;font-size:15px}
+.fbar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:0 0 12px}
+.fchips{display:flex;gap:6px;flex-wrap:wrap;min-width:0}
+.fchip{padding:6px 13px;border-radius:999px;background:var(--card);color:var(--fg);border:1px solid var(--line);font-size:13.5px;font-weight:500;white-space:nowrap;box-shadow:var(--shadow)}
+.fchip:hover{text-decoration:none;border-color:var(--acc)}
+.fchip.on{background:var(--btn);color:var(--btnfg);border-color:transparent}
+.fsel{display:flex;gap:8px;margin-left:auto}.fsel select{padding:6px 10px;font-size:13.5px;border-radius:999px}
+@media (max-width:600px){
+ .fchips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:0 -12px;padding:2px 12px 4px;flex:0 0 calc(100% + 24px)}
+ .fchips::-webkit-scrollbar{display:none}
+ .fsel{margin-left:0}.fsel select{flex:1}
+}
+/* file pickers: a styled button instead of the browser's plain one */
+input[type=file]{max-width:100%;padding:5px;font-size:13.5px;color:var(--mut)}
+input[type=file]::file-selector-button{font:inherit;font-weight:600;color:var(--btnfg);background:var(--btn);border:0;border-radius:999px;padding:6px 14px;margin-right:10px;cursor:pointer}
+.drop{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:26px 14px;text-align:center;
+border:2px dashed var(--ghostline);border-radius:var(--radius);background:color-mix(in srgb,var(--acc) 5%,transparent);cursor:pointer;transition:border-color .15s,background .15s}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop.over,.drop:hover{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 12%,transparent)}.drop.has{border-style:solid;border-color:var(--acc)}
+.drop b{font-size:15px}
+.toolbar button.ghost{background:var(--card);box-shadow:var(--shadow)}
 </style></head><body>
-<header><span class="appnav"><button type="button" onclick="history.back()" title="Back" aria-label="Back">‹</button><button type="button" onclick="location.reload()" title="Reload" aria-label="Reload">↻</button></span><a class="brand" href="/"><img src="/brand/icon-128.png?v={{ brand.icon_v }}" alt="">{{ brand.name }}</a><form action="/" method="get"><input name="q" value="{{ q|default('') }}" placeholder="Search tags…  e.g. flower -night type:video"><button>Search</button></form>
-<nav><a href="/scrape">Scrape</a><a href="/tags">Tags</a><button type="button" class="ghost" id="cust-open">🎨 Customize</button>{% if auth_on %}<form action="/logout" method="post" style="flex:none;display:block"><button class="ghost">Log out</button></form>{% endif %}</nav></header>
+<header{% if q %} class="search-open"{% endif %}><span class="appnav"><button type="button" onclick="mbBack()" title="Back" aria-label="Back">‹</button><button type="button" onclick="location.reload()" title="Reload" aria-label="Reload">↻</button></span><a class="brand" href="/"><img src="/brand/icon-128.png?v={{ brand.icon_v }}" alt=""><span>{{ brand.name }}</span></a><form class="hsearch" action="/" method="get" role="search"><input name="q" value="{{ q|default('') }}" placeholder="Search tags…  e.g. flower -night type:video"><button>Search</button></form>
+<span class="hphone"><button type="button" class="hbtn" id="hs-toggle" aria-label="Search" title="Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><button type="button" class="hbtn" id="hm-toggle" aria-label="Menu" title="Menu" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></span>
+<nav id="hnav"><a href="/">Gallery</a><a href="/scrape">Scrape</a><a href="/tags">Tags</a><button type="button" class="ghost" id="cust-open">🎨 Customize</button>{% if auth_on %}<form action="/logout" method="post" style="flex:none;display:block"><button class="ghost">Log out</button></form>{% endif %}</nav></header>
+<script>(function(){const h=document.querySelector('header'),m=document.getElementById('hm-toggle'),sb=document.getElementById('hs-toggle');
+m.onclick=()=>{const o=h.classList.toggle('menu-open');m.setAttribute('aria-expanded',o)};
+sb.onclick=()=>{const o=h.classList.toggle('search-open');if(o)h.querySelector('.hsearch input').focus()};
+document.addEventListener('click',e=>{if(h.classList.contains('menu-open')&&!h.contains(e.target)){h.classList.remove('menu-open');m.setAttribute('aria-expanded',false)}})})();</script>
+<script>/* remember where you are on this device; the List link on a post goes back to the same list and scroll position */
+(function(){const get=k=>{try{return JSON.parse(localStorage.getItem(k)||"null")}catch(e){return null}},put=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+const here=location.pathname+location.search,isPost=/^\/post\/\d+$/.test(location.pathname),isList=location.pathname==="/"||location.pathname.startsWith("/tag/");
+if(isPost||isList)put("mb-last",{url:here,t:Date.now()});
+if(isList){const prev=get("mb-list");let back=false;try{back=!!sessionStorage.getItem("mb-back");sessionStorage.removeItem("mb-back")}catch(e){}
+ put("mb-list",{url:here,y:prev&&prev.url===here?prev.y:0});
+ if(back&&prev&&prev.url===here&&prev.y)addEventListener("load",()=>scrollTo(0,prev.y));
+ addEventListener("pagehide",()=>put("mb-list",{url:here,y:scrollY}));
+ /* a post was deleted since this list was shown: when Back brings up the saved copy, load it fresh */
+ addEventListener("pageshow",e=>{let st=null;try{st=sessionStorage.getItem("mb-stale");sessionStorage.removeItem("mb-stale")}catch(x){}
+  const nav=(performance.getEntriesByType("navigation")[0]||{}).type;if(st&&(e.persisted||nav==="back_forward"))location.reload()})}
+window.mbListUrl=fallback=>{const l=get("mb-list");return l&&l.url?l.url:fallback};
+window.mbBack=()=>{if(history.length>1)return history.back();if(isPost){try{sessionStorage.setItem("mb-back","1")}catch(e){}location.href=mbListUrl("/")}};
+document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest("#nav-list");if(!a)return;e.preventDefault();
+ const url=mbListUrl(a.getAttribute("href"));let ref="";try{const r=new URL(document.referrer);if(r.origin===location.origin)ref=r.pathname+r.search}catch(x){}
+ if(ref===url)return history.back();try{sessionStorage.setItem("mb-back","1")}catch(x){}location.href=url})})();</script>
 <main>{% block body %}{% endblock %}</main>
 
 <dialog id="a2hs"><div class="in">
@@ -168,6 +233,7 @@ main{padding-bottom:calc(40px + env(safe-area-inset-bottom))}
 <h3>Customize</h3>
 <button type="button" class="ghost" id="a2hs-open" hidden style="width:100%;margin:0 0 8px">📱 Add to Home Screen…</button>
 <a href="/customize" class="custlink"><b>🎨 Customize screen →</b><span class="mut">Colours for every box, ready-made setups, outlines, corner roundness and thumbnail size, with a live preview.</span></a>
+<div class="crow"><span>Tags under posts</span><label class="mut"><input type="checkbox" id="tg-d"> Computer</label><label class="mut"><input type="checkbox" id="tg-m"> Phone</label></div>
 <p class="mut" style="margin:12px 0 0">Name, icon and background pictures are shared by all your devices.</p>
 <div class="crow"><span>Name</span><input id="sitename" maxlength="40" value="{{ brand.name }}" style="max-width:150px"><button class="ghost" type="button" id="sitename-save">Save</button></div>
 <div class="crow"><span>Icon</span><input type="file" id="iconfile" accept="image/*" style="max-width:150px"><button class="ghost" type="button" id="iconreset" title="Back to the default icon">↺</button></div>
@@ -181,12 +247,12 @@ main{padding-bottom:calc(40px + env(safe-area-inset-bottom))}
 (function(){
 const KEY=MBK,root=document.documentElement,TH={{ theme_cfg|tojson }};
 let st={};try{st=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
-const LAYOUT=['dim','radius','thumb','colsd','colsm','pout','poutw'];
+const LAYOUT=['dim','radius','thumb','colsd','colsm','pout','poutw','tagsd','tagsm'];
 const $=id=>document.getElementById(id);
 function save(){try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){alert('Could not save (storage blocked).')}}
 function apply(){for(const f of [...TH.roles,...LAYOUT])root.style.removeProperty('--'+f);
-for(const k of ['colsd','colsm']){if(st[k])root.dataset[k]=st[k];else delete root.dataset[k]}
-for(const[k,v]of Object.entries(st)){if(k==='bgimg')continue;root.style.setProperty('--'+k,(k==='radius'||k==='thumb')?v+'px':v)}}
+for(const k of ['colsd','colsm','tagsd','tagsm']){if(st[k])root.dataset[k]=st[k];else delete root.dataset[k]}
+for(const[k,v]of Object.entries(st)){if(k==='bgimg'||k==='tagsd'||k==='tagsm')continue;root.style.setProperty('--'+k,(k==='radius'||k==='thumb')?v+'px':v)}}
 const raw=k=>getComputedStyle(root).getPropertyValue('--'+k).trim(),hex6=v=>/^#[0-9a-f]{6}$/i.test(v);
 function lum(h){const c=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:((v+.055)/1.055)**2.4);return .2126*c[0]+.7152*c[1]+.0722*c[2]}
 function ratio(a,b){const x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)}
@@ -211,6 +277,9 @@ $('cust-open').onclick=()=>$('cust').showModal();
  $('a2hs-later').onclick=()=>{try{localStorage.setItem(K,String(Date.now()+3*864e5))}catch(e){}d.close()};
  let v=null;try{v=localStorage.getItem(K)}catch(e){}
  if(location.pathname!=='/setup'&&v!=='done'&&!(v&&Date.now()<+v))setTimeout(open,900)})();$('cclose').onclick=()=>$('cust').close();
+/* tags under posts on the main page: on for computers and off for phones unless changed (saved in this browser) */
+(function(){const d=$('tg-d'),m=$('tg-m'),sync=()=>{d.checked=mbTheme.get('tagsd')!=='off';m.checked=mbTheme.get('tagsm')==='on'};sync();
+d.onchange=()=>mbTheme.set('tagsd',d.checked?null:'off');m.onchange=()=>mbTheme.set('tagsm',m.checked?'on':null);$('cust-open').addEventListener('click',sync)})();
 $('cust').addEventListener('click',e=>{if(e.target===$('cust'))$('cust').close()});
 const bgmsg=t=>{$('bgstatus').textContent=t};
 const post=async(url,body)=>{const r=await fetch(url,{method:'POST',body,credentials:'same-origin'});if(!r.ok)throw new Error((await r.text()).replace(/<[^>]+>/g,' ').trim().slice(0,160)||('HTTP '+r.status));return r.json()};

@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% block title %}Post {{ p.id }} · {{ brand.name }}{% endblock %}{% block body %}
 {% set images = files|selectattr('is_image')|list %}
 <nav class="postnav">{% if prev_url %}<a href="{{ prev_url }}" id="nav-prev" title="Previous post (← key)">← Prev</a>{% else %}<span class="off">← Prev</span>{% endif %}
-<span class="mut">← → keys also work</span>
+<a href="{{ list_url }}" id="nav-list" title="Back to the list you came from">▦ List</a>
 {% if next_url %}<a href="{{ next_url }}" id="nav-next" title="Next post (→ key)">Next →</a>{% else %}<span class="off">Next →</span>{% endif %}</nav>
 <script>
 document.addEventListener('keydown',e=>{
@@ -19,10 +19,15 @@ document.addEventListener('keydown',e=>{
 {% for o in dups %}<div class="dup"><a href="/post/{{ o.id }}"><img src="/thumbs/{{ o.sha256 }}.jpg" alt="" onerror="this.style.display='none'"></a>
 <div><a href="/post/{{ o.id }}">#{{ o.id }} {{ o.title or 'Untitled' }}</a><div class="mut">{{ o.width }}×{{ o.height }} (this one: {{ p.width }}×{{ p.height }}) · {{ o.source }}</div>
 <div class="row" style="margin:6px 0 0">
-<form action="/post/{{ p.id }}/dup/{{ o.id }}/dismiss" method="post"><button class="ghost">Keep both</button></form>
-<form action="/post/{{ p.id }}/dup/{{ o.id }}/merge" method="post" onsubmit="return confirm('Move this post\'s tags to #{{ o.id }} and delete this post?')"><button class="ghost">Merge into #{{ o.id }}</button></form>
-<form action="/post/{{ o.id }}/delete" method="post" onsubmit="return confirm('Delete #{{ o.id }}?')"><input type="hidden" name="next" value="/post/{{ p.id }}"><button class="danger">Delete #{{ o.id }}</button></form>
+<form class="inplace" action="/post/{{ p.id }}/dup/{{ o.id }}/dismiss" method="post"><button class="ghost">Keep both</button></form>
+<form class="inplace" data-keep-list action="/post/{{ p.id }}/dup/{{ o.id }}/merge" method="post" onsubmit="return confirm('Move this post\'s tags to #{{ o.id }} and delete this post?')"><button class="ghost">Merge into #{{ o.id }}</button></form>
+<form class="inplace" action="/post/{{ o.id }}/delete" method="post" onsubmit="return confirm('Delete #{{ o.id }}?')"><input type="hidden" name="next" value="/post/{{ p.id }}"><button class="danger">Delete #{{ o.id }}</button></form>
 </div></div></div>{% endfor %}</div>
+<script>/* duplicate actions update this page in place: Back still goes to the list you came from (one press) */
+document.querySelectorAll('form.inplace').forEach(f=>f.addEventListener('submit',async e=>{if(e.defaultPrevented)return;e.preventDefault();
+try{const r=await fetch(f.action,{method:'POST',body:new FormData(f),credentials:'same-origin'});if(!r.ok)throw new Error('HTTP '+r.status);
+let to=location.href;if('keepList' in f.dataset){const u=new URL(r.url);to=u.pathname+location.search}
+try{sessionStorage.setItem('mb-stale','1')}catch(x){}location.replace(to)}catch(x){alert('Could not do that: '+x.message)}}));</script>
 <style>.dupbox{background:var(--card);border:1px solid #c77d00;border-radius:var(--radius);padding:10px 14px;margin:0 0 12px}
 .dup{display:flex;gap:12px;align-items:flex-start;margin-top:10px}.dup img{width:84px;height:84px;object-fit:cover;border-radius:8px;display:block}</style>{% endif %}
 <h2>{{ p.title or 'Untitled' }}</h2>
@@ -36,7 +41,12 @@ document.addEventListener('keydown',e=>{
 </div>
 <form class="panel" action="/post/{{ p.id }}/tags" method="post"><h3>Edit</h3><input name="title" value="{{ p.title }}" style="width:100%;margin-bottom:8px">
 <textarea name="tags" rows="3">{{ tags|map(attribute='name')|join(' ') }}</textarea><div class="row"><button>Save tags</button></div></form>
-<form action="/post/{{ p.id }}/delete" method="post" onsubmit="return confirm('Delete this post?')"><button class="danger ghost" style="width:100%">Delete post</button></form>
+<form action="/post/{{ p.id }}/delete" method="post" id="delpost" data-after="{{ next_url or prev_url or list_url }}" onsubmit="return confirm('Delete this post?')"><input type="hidden" name="next" value="{{ next_url or prev_url or list_url }}"><button class="danger ghost" style="width:100%">Delete post</button></form>
+<script>/* delete, then show the next post in place of this one: Back still leads to the list you came from, not to the deleted post */
+(function(){const f=document.getElementById('delpost');f.addEventListener('submit',async e=>{if(e.defaultPrevented)return;e.preventDefault();
+try{const r=await fetch(f.action,{method:'POST',body:new FormData(f),credentials:'same-origin',redirect:'manual'});
+if(r.type!=='opaqueredirect'&&!r.ok)throw new Error('HTTP '+r.status);try{sessionStorage.setItem('mb-stale','1')}catch(x){}location.replace(f.dataset.after)}
+catch(x){alert('Could not delete: '+x.message)}})})();</script>
 </div></div>
 
 {% if images %}

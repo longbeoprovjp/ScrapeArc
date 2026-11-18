@@ -1,5 +1,6 @@
 """FastAPI web UI. Set MINIBOORU_PASSWORD to require HTTP Basic auth (user: admin)."""
 import hmac
+import io
 import json
 import html
 import os
@@ -9,14 +10,16 @@ import tempfile
 import threading
 import time
 import uuid
+import zipfile
 from datetime import date
 from pathlib import Path
 from urllib.parse import quote, urlencode
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from PIL import Image
 
 from . import clip, core, scraper, similar, themes, watcher
 
@@ -272,6 +275,39 @@ def create_app(scheduler: bool = False) -> FastAPI:
     def clip_bookmarklet(request: Request):
         return tpl.TemplateResponse(request, "clip_bookmarklet.html", {})
 
+    @app.get("/clip/extension.zip")
+    def clip_extension(request: Request, app_url: str = Query("", alias="app")):
+        """The "Save to ..." toolbar button for Brave/Chrome/Edge: runs the same code as the bookmark, with this
+        install's name and icon. It may only touch the tab it is clicked on (activeTab), nothing else."""
+        origin = app_url.rstrip("/") or f"{request.url.scheme}://{request.url.netloc}"
+        if not re.fullmatch(r"https?://[A-Za-z0-9.\-\[\]:]+", origin):
+            raise HTTPException(400, "app must be this app's address, like http://host:8090")
+        name = brand["name"]
+        runner = (Path(__file__).parent / "templates" / "_clip_runner.js").read_text()
+        manifest = {"manifest_version": 3, "name": f"Save to {name}", "version": "1.0",
+                    "description": f"Saves the post you are looking at to {name} ({origin}), with your own login.",
+                    "permissions": ["activeTab", "scripting"],
+                    "icons": {str(n): f"icon-{n}.png" for n in (16, 32, 48, 128)},
+                    "action": {"default_title": f"Save to {name}", "default_icon": {str(n): f"icon-{n}.png" for n in (16, 32, 48)}},
+                    "background": {"service_worker": "background.js"}}
+        background = (runner + "\nconst APP = " + json.dumps(origin) + ";\n"
+                      "chrome.action.onClicked.addListener(tab => {\n"
+                      "  if (!tab.id || !/^https?:/.test(tab.url || '')) return;   /* not on browser pages */\n"
+                      "  chrome.scripting.executeScript({target: {tabId: tab.id}, world: 'MAIN', func: mbClipRun, args: [APP]});\n"
+                      "});\n")
+        buf = io.BytesIO()
+        with Image.open(icon_file("icon-192.png")) as im, zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            im = im.convert("RGBA")
+            for n in (16, 32, 48, 128):
+                out = io.BytesIO()
+                im.resize((n, n), Image.LANCZOS).save(out, "PNG")
+                z.writestr(f"save-to-app/icon-{n}.png", out.getvalue())
+            z.writestr("save-to-app/manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False))
+            z.writestr("save-to-app/background.js", background)
+        fname = re.sub(r"[^A-Za-z0-9]+", "-", f"save-to-{name}").strip("-").lower() or "save-to-app"
+        return Response(buf.getvalue(), media_type="application/zip",
+                        headers={"Content-Disposition": f'attachment; filename="{fname}.zip"'})
+
     @app.get("/clip")
     def clip_page(request: Request):
         with core.connect() as c:
@@ -418,7 +454,8 @@ def create_app(scheduler: bool = False) -> FastAPI:
                 WHERE (d.a=? OR d.b=?) AND d.status='open' ORDER BY d.dist""", (pid, pid, pid)).fetchall()
         qs = list_qs(q, sort, view, src)
         return tpl.TemplateResponse(request, "post.html", {"p": p, "tags": tags, "files": files, "dups": dups,
-            "prev_url": f"/post/{prev_id}{qs}" if prev_id else None, "next_url": f"/post/{next_id}{qs}" if next_id else None})
+            "prev_url": f"/post/{prev_id}{qs}" if prev_id else None, "next_url": f"/post/{next_id}{qs}" if next_id else None,
+            "list_url": "/" + qs})
 
     @app.post("/post/{pid}/tags")
     def edit_tags(pid: int, tags: str = Form(""), title: str = Form("")):

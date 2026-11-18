@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS deleted_media (   -- single files you removed from a 
   sha256 TEXT PRIMARY KEY, post_id INTEGER, at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);   -- per-install: name, ...
 CREATE INDEX IF NOT EXISTS idx_post_tags_tag ON post_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_dup_flags_b ON dup_flags(b);
+CREATE INDEX IF NOT EXISTS idx_scraped_post ON scraped(post_id);
 """
 # Tag types are chosen per install (Tags page, or the first-run setup). "other" always exists and catches everything
 # that has no type of its own. Each type has a colour and a place in the list (pos).
@@ -240,6 +242,8 @@ def connect(data=None):
         c.execute("ALTER TABLE scrape_runs ADD COLUMN finished TEXT")
         c.execute("ALTER TABLE scrape_runs ADD COLUMN duration_s INTEGER")   # NULL = not recorded (older runs)
         c.execute("UPDATE scrape_runs SET finished=started")
+    # list order (upload date): made after the columns above exist; an existing index costs nothing here
+    c.execute("CREATE INDEX IF NOT EXISTS idx_posts_when ON posts(COALESCE(posted, created), id)")
     if fresh:   # a new install starts with only 'other'; its owner picks the rest
         c.execute("INSERT OR IGNORE INTO categories(name, color) VALUES (?, ?)", (OTHER, OTHER_COLOR))
         c.execute(f"PRAGMA user_version = {LATEST_DB_VERSION}")
@@ -734,11 +738,12 @@ def keyword_match(text: str, keywords) -> list[str]:
 VIEWS = {"all": "All posts", "videos": "Videos", "images": "Images", "fav": "Favorite",
          "fav_videos": "Favorite Videos", "fav_images": "Favorite Pics", "dups": "Possible duplicates",
          "bookmarked": "Bookmarked"}
-BOOKMARK_SQL = "EXISTS(SELECT 1 FROM scraped s WHERE s.post_id=p.id AND s.status='bookmark')"   # saved with the Save bookmark
+BOOKMARK_SQL = "p.id IN (SELECT post_id FROM scraped WHERE status='bookmark')"   # saved with the Save bookmark
 # second filter next to the view: everything / only things you uploaded / only scraped & imported (by the 'upload' tag)
 SOURCES = {"all": "Everything", "upload": "Uploads", "scraped": "Not uploads"}
 UPLOAD_TAG = "upload"
-DUP_SQL = "EXISTS(SELECT 1 FROM dup_flags d WHERE d.status='open' AND (d.a=p.id OR d.b=p.id))"
+# both are worked out once per query (not once per post): with 30,000+ posts the per-post form took 14 s and 190 s a page
+DUP_SQL = "p.id IN (SELECT a FROM dup_flags WHERE status='open' UNION ALL SELECT b FROM dup_flags WHERE status='open')"
 
 
 def parse_query(q: str):

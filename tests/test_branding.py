@@ -33,7 +33,7 @@ def test_first_run_asks_for_a_name_then_never_again(app_client):
     r = cl.post("/setup", data={"name": "  My   Archive ", "next": "/tags"}, follow_redirects=False)
     assert r.headers["location"] == "/tags"
     page = cl.get("/").text
-    assert "<title>My Archive</title>" in page and ">My Archive</a>" in page
+    assert "<title>My Archive</title>" in page and ">My Archive</span></a>" in page
     assert cl.get("/tags", follow_redirects=False).status_code == 200      # no more setup
     assert app_client().get("/", follow_redirects=False).status_code == 200  # also after a restart
 
@@ -54,7 +54,7 @@ def test_customize_changes_name_and_icon(app_client):
     cl.post("/setup", data={"name": "First", "next": "/"})
     default = cl.get("/brand/favicon-64.png").content
     assert cl.post("/settings/name", data={"name": "Second"}).json()["name"] == "Second"
-    assert ">Second</a>" in cl.get("/").text and "<h1>Second</h1>" in cl.get("/login").text
+    assert ">Second</span></a>" in cl.get("/").text and "<h1>Second</h1>" in cl.get("/login").text
     assert cl.post("/settings/name", data={"name": "   "}).status_code == 400
     assert cl.post("/settings/name", data={"name": "x" * 41}).status_code == 400
     assert cl.post("/settings/icon", files={"file": ("i.png", png("orange"), "image/png")}).json()["icon_v"]

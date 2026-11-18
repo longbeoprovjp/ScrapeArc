@@ -5,44 +5,41 @@
 <p class="mut">The files are downloaded by your own browser with your own login, like viewing the post. Nothing logs in for you, nothing crawls the site, and your password never reaches {{ brand.name }}.</p>
 <h3>1. Add the bookmark</h3>
 <p>Drag this button to your bookmarks bar <span class="mut">(Brave/Chrome: press Ctrl+Shift+B if the bar is hidden)</span>:</p>
-<p><a id="bml" href="#" style="display:inline-block;padding:10px 18px;border-radius:999px;background:var(--btn);color:var(--btnfg);font-weight:700;text-decoration:none">⭳ Save to {{ brand.name }}</a></p>
+<p><a id="bml" href="#" style="display:inline-block;padding:10px 18px;border-radius:999px;background:var(--btn);color:var(--btnfg);font-weight:700;text-decoration:none">📥 Save to {{ brand.name }}</a></p>
 <details><summary>Can't drag? Make it by hand</summary>
-<p class="mut">Create a new bookmark, name it “Save to {{ brand.name }}”, and paste this as its URL:</p>
+<p class="mut">Create a new bookmark, name it “📥 Save to {{ brand.name }}” (the emoji shows as its icon), and paste this as its URL:</p>
 <textarea id="bmlcode" rows="5" readonly style="width:100%;font-family:monospace;font-size:12px"></textarea>
 <div class="row"><button type="button" class="ghost" id="bmlcopy">Copy</button><span class="mut" id="bmlmsg"></span></div></details>
+<h3>Or: a toolbar button with {{ brand.name }}'s icon</h3>
+<p>Bookmarks can't show a picture as their icon, but a small browser button can. It sits next to the address bar, shows the app's icon and does the same job. Brave, Chrome and Edge:</p>
+<ol>
+<li><a id="extdl" href="/clip/extension.zip"><b>Download the button</b></a> and unzip it to a folder you keep (the browser loads it from there).</li>
+<li>Open <code>brave://extensions</code> (Chrome: <code>chrome://extensions</code>, Edge: <code>edge://extensions</code>) and turn on <b>Developer mode</b>.</li>
+<li>Press <b>Load unpacked</b> and choose the unzipped folder.</li>
+<li>Click the puzzle-piece icon by the address bar and pin <b>Save to {{ brand.name }}</b>.</li>
+</ol>
+<p class="mut">It can only see the tab you click it on, at that moment. If you change the app's icon, name or address, download it again and press ↻ on its card on the extensions page.</p>
 <h3>2. Use it</h3>
 <ol>
 <li>Open the post on the site (logged in as usual).</li>
-<li>Click <b>Save to {{ brand.name }}</b>. If the browser blocks the pop-up, allow pop-ups for that site and click again.</li>
+<li>Click <b>Save to {{ brand.name }}</b> (bookmark or button). If the browser blocks the window, click the blue bubble that appears on the page.</li>
 <li>In the window: check the files and tags (remove or add any), then <b>Save</b>.</li>
 </ol>
 <p class="mut">This bookmark is made for <b id="bmlorigin"></b>. If you open {{ brand.name }} under a different address (for example the https one vs the home-network one), get the bookmark again from that address.</p>
-<p class="mut">Nothing happens when you click it? Some sites block bookmarks like this one. Tell me which browser you use; a small browser extension can do the same job.</p>
+<p class="mut">Nothing happens when you click the bookmark? Some sites block bookmarks like this one; use the toolbar button above instead.</p>
 
 <p class="mut">On iPhone: this bookmark doesn't work there (iPhones only let a full App Store app download pictures that a site protects). Save those posts from a computer.</p>
 </div>
 <script>
 (function(){
-/* the bookmarklet: opens the popup on THIS app's address, sends it the page, then downloads the files it asks for
-   (in the page, so the site's login cookies apply) and passes them back. It only talks to that one window. */
+{% include '_clip_runner.js' %}
+/* the bookmark runs the same code as the toolbar button (_clip_runner.js), with this app's address filled in */
 const APP=location.origin;
-const code=`(()=>{const APP=${JSON.stringify(APP)};const w=window.open(APP+'/clip','mbclip','width=960,height=860');
-if(!w){alert('Allow pop-ups for this site, then click the bookmark again.');return}
-const url=location.href,html=document.documentElement.outerHTML;let bub=null;
-const say=(t,ok)=>{if(!bub){bub=document.createElement('div');Object.assign(bub.style,{position:'fixed',right:'16px',bottom:'16px',zIndex:'2147483647',padding:'10px 16px',borderRadius:'999px',font:'600 14px system-ui,sans-serif',color:'#fff',boxShadow:'0 4px 16px rgba(0,0,0,.4)',transition:'opacity .4s',pointerEvents:'none'});document.body.appendChild(bub)}
-bub.textContent=t;bub.style.background=ok===false?'#d64545':ok?'#2f9e44':'#5a67f2';bub.style.opacity='1';
-if(ok!==undefined){const b=bub;setTimeout(()=>{b.style.opacity='0';setTimeout(()=>{b.remove();if(bub===b)bub=null},500)},ok?2500:6000)}};
-const on=async e=>{if(e.source!==w||e.origin!==APP)return;const m=e.data||{};
-if(m.type==='ready')w.postMessage({type:'page',url,html},APP);
-if(m.type==='status'){say(String(m.text||'').slice(0,120),m.state==='saved'?true:m.state==='error'?false:undefined);if(m.state==='saved')removeEventListener('message',on)}
-if(m.type==='fetch'&&Array.isArray(m.urls)){for(let i=0;i<m.urls.length;i++){const u=String(m.urls[i]);
-try{const r=await fetch(u);if(!r.ok)throw 0;const b=await r.arrayBuffer();
-w.postMessage({type:'file',i,url:u,mime:r.headers.get('content-type')||'',buf:b},APP,[b])}
-catch(_){w.postMessage({type:'file-failed',i,url:u},APP)}}w.postMessage({type:'done'},APP)}};
-addEventListener('message',on)})()`;
-const href='javascript:'+encodeURIComponent(code.replace(/\n/g,''));
+const code='('+mbClipRun.toString()+')('+JSON.stringify(APP)+')';
+const href='javascript:'+encodeURIComponent(code);
 document.getElementById('bml').href=href;document.getElementById('bmlcode').value=href;
 document.getElementById('bmlorigin').textContent=APP;
+document.getElementById('extdl').href='/clip/extension.zip?app='+encodeURIComponent(APP);
 document.getElementById('bml').onclick=e=>{e.preventDefault();alert('Drag this button to your bookmarks bar instead of clicking it here.')};
 document.getElementById('bmlcopy').onclick=async()=>{try{await navigator.clipboard.writeText(href);document.getElementById('bmlmsg').textContent='Copied.'}
 catch(_){document.getElementById('bmlcode').select();document.getElementById('bmlmsg').textContent='Press Ctrl+C to copy.'}};

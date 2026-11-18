@@ -107,7 +107,7 @@ def test_popup_closes_after_save_and_page_shows_a_bubble(cl):
     assert "tell('error'" in popup                                    # on failure the window stays open
     bml = cl.get("/clip/bookmarklet").text
     assert "m.type==='status'" in bml and "textContent=t" in bml      # bubble text is set as text, never as HTML
-    code = bml[bml.index("const code=`"):bml.index("`;", bml.index("const code=`"))]
+    code = bml[bml.index("function mbClipRun(APP)"):bml.index("const APP=location.origin")]   # shared with the toolbar button
     assert "innerHTML" not in code and "insertAdjacentHTML" not in code     # nothing from the popup is turned into page HTML
 
 
@@ -125,7 +125,7 @@ def test_bookmarked_filter_shows_only_bookmark_saves(cl, tmp_path):
         rows, total = core.search(c, "", view="bookmarked")
         assert [p["id"] for p in rows] == [r["post_id"]] and total == 1
     page = cl.get("/?view=bookmarked").text
-    assert 'value="bookmarked" selected' in page and f'/post/{r["post_id"]}' in page and f'/post/{other}"' not in page
+    assert 'class="fchip on" href="/?view=bookmarked"' in page and f'/post/{r["post_id"]}' in page and f'/post/{other}"' not in page
 
 
 # ---------- iPhone: home-screen app ----------
@@ -149,3 +149,19 @@ def test_with_a_password_only_the_manifest_skips_login(tmp_path, monkeypatch):
     assert cl.get("/manifest.webmanifest").status_code == 200                      # phones read it before you log in
     assert cl.get("/clip/bookmarklet", follow_redirects=False).status_code == 303
     assert cl.post("/clip/api/save", content=b"{}").status_code == 401             # the Shortcut endpoint is gone (login required)
+
+
+def test_toolbar_button_download_has_icon_and_same_code_as_bookmark(cl):
+    import io, json, zipfile
+    r = cl.get("/clip/extension.zip", params={"app": "http://box.lan:8090"})
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    names = set(z.namelist())
+    assert {f"save-to-app/icon-{n}.png" for n in (16, 32, 48, 128)} <= names
+    man = json.loads(z.read("save-to-app/manifest.json"))
+    assert man["manifest_version"] == 3 and man["permissions"] == ["activeTab", "scripting"] and "host_permissions" not in man
+    bg = z.read("save-to-app/background.js").decode()
+    assert 'const APP = "http://box.lan:8090";' in bg and "function mbClipRun(APP)" in bg and "world: 'MAIN'" in bg
+    assert cl.get("/clip/extension.zip", params={"app": "javascript:alert(1)"}).status_code == 400
+    page = cl.get("/clip/bookmarklet").text
+    assert "function mbClipRun(APP)" in page and "mbClipRun.toString()" in page and 'id="extdl"' in page

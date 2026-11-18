@@ -775,7 +775,7 @@ def test_scrape_can_start_at_a_later_page(site, db, monkeypatch):
     logs = []
     st = scraper.scrape(db, base + "/pg/", opts(limit=5, start_page=3), log=logs.append)
     assert "/pg/" not in hits and "/pg/page/2/" not in hits and "/pg/page/3/" in hits    # pages 1-2 never read
-    assert st["new"] == 1 and any("Starting at listing page 3" in m for m in logs) and any("Listing page 3:" in m for m in logs)
+    assert st["new"] == 1 and any(m == "Scraping from page 3" for m in logs) and any("Listing page 3:" in m for m in logs)
     assert any("no more pages" in m for m in logs)                                      # page 4 is a 404: normal end
     logs.clear()
     st = scraper.scrape(db, base + "/pg/", opts(limit=5, start_page=99), log=logs.append)
@@ -863,3 +863,13 @@ def test_connection_blip_mid_run_is_retried_but_offline_fails_fast(monkeypatch):
     g.client = httpx.Client(transport=httpx.MockTransport(lambda req: (_ for _ in ()).throw(httpx.ConnectError("down"))))
     with pytest.raises(httpx.ConnectError):                                  # never reached the site: offline, fail fast
         g._request("https://site.example/a")
+
+
+def test_run_log_tracks_current_page():
+    log = scraper.RunLog()
+    assert log.page is None
+    log.append("Scraping from page 40")
+    assert log.page == 40
+    log.append("Listing page 41: https://example.com/page/41/")
+    log.append("  found 3 new post cards")
+    assert log.page == 41
