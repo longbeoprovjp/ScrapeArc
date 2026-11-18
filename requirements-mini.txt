@@ -1,5 +1,5 @@
 # pinned to the versions the test suite passes with; Dependabot proposes updates (.github/dependabot.yml)
-fastapi==0.162.5
+fastapi==0.163.1
 uvicorn==0.54.0
 python-multipart==0.0.33
 jinja2==3.1.6
