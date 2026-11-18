@@ -763,21 +763,38 @@ SORTS = {"new": "COALESCE(p.posted, p.created) DESC, p.id DESC",
          "old": "COALESCE(p.posted, p.created) ASC, p.id ASC"}
 
 
+def _like(text: str) -> str:
+    """Text for a LIKE pattern, with its wildcards taken literally."""
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def title_words(c, q: str) -> list[str]:
+    """Words of a search that are not tags, so they were looked for in titles (shown above the results)."""
+    inc, exc, _ = parse_query(q)
+    return [w for w in inc if lookup_tag(c, w) is None] + ["-" + w for w in exc if lookup_tag(c, w) is None]
+
+
 def _filters(c, q: str, view: str = "all", src: str = "all"):
-    """WHERE clause + args for a search query and view; None when a searched tag doesn't exist (no results)."""
+    """WHERE clause + args for a search query and view (None only when the view can have no results)."""
     inc, exc, flt = parse_query(q)
     where, args = [], []
+    # a word that is a tag searches that tag; any other word searches titles instead (see title_words)
     for name in inc:
         tid = lookup_tag(c, name)
         if tid is None:
-            return None
+            where.append("p.title LIKE ? ESCAPE '\\'")
+            args.append(f"%{_like(name)}%")
+            continue
         where.append("EXISTS(SELECT 1 FROM post_tags WHERE post_id=p.id AND tag_id=?)")
         args.append(tid)
     for name in exc:
         tid = lookup_tag(c, name)
-        if tid is not None:
-            where.append("NOT EXISTS(SELECT 1 FROM post_tags WHERE post_id=p.id AND tag_id=?)")
-            args.append(tid)
+        if tid is None:
+            where.append("p.title NOT LIKE ? ESCAPE '\\'")
+            args.append(f"%{_like(name)}%")
+            continue
+        where.append("NOT EXISTS(SELECT 1 FROM post_tags WHERE post_id=p.id AND tag_id=?)")
+        args.append(tid)
     if flt.get("type") in ("image", "video"):
         where.append("p.mime LIKE ?")
         args.append(flt["type"] + "/%")

@@ -17,6 +17,8 @@ screen; add a background picture in Customize if you like.
   - `-tag` excludes a tag.
   - `type:video` or `type:image` shows only videos or only pictures.
   - `title:word` matches a word in the title.
+  - A word that isn't a tag is looked for in titles instead (and `-word` hides titles containing it), so `lake`
+    finds "Sunset over the lake" even without a *lake* tag.
   - Example: `tag1 tag2 -tag3 type:video`
 - **Filter buttons** under the post count: all posts, videos, images, favorites (all, videos or pictures only),
   possible duplicates, and posts saved with the bookmark. On a phone, swipe the row sideways.

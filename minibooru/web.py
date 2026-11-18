@@ -440,8 +440,9 @@ def create_app(scheduler: bool = False) -> FastAPI:
         with core.connect() as c:
             rows, total, page, pages = search_page(c, q, page, sort, view, src=src)
             ptags = core.tags_for_posts(c, [r["id"] for r in rows])
+            twords = core.title_words(c, q) if q else []
         return tpl.TemplateResponse(request, "index.html", {
-            "posts": rows, "ptags": ptags, "total": total, "q": q, "page": page, "pages": pages, "sort": sort, "view": view, "views": core.VIEWS,
+            "posts": rows, "ptags": ptags, "total": total, "q": q, "title_words": twords, "page": page, "pages": pages, "sort": sort, "view": view, "views": core.VIEWS,
             "src": src, "sources": core.SOURCES, "here": page_url("/", page, **keep),
             "post_qs": list_qs(q, sort, view, src), "jump_action": "/",
             "prev_url": page_url("/", page - 1, **keep) if page > 1 else None,

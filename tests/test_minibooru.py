@@ -755,3 +755,51 @@ def test_stats_page_counts_and_storage(env, monkeypatch):
     assert '<b>1</b><span>favorites</span>' in page and 'title="25-03' not in page and 'title="2025-03: 1 posts"' in page
     assert "used by this archive" in page and "free of" in page and '>robin <span class="mut">1</span>' in page
     assert '<a href="/stats">Stats</a>' in page
+
+
+def test_favorite_switches_in_place(env, monkeypatch):
+    from fastapi.testclient import TestClient
+    from minibooru.web import create_app
+    monkeypatch.delenv("MINIBOORU_PASSWORD", raising=False)
+    with core.connect() as c:
+        pid = c.execute("INSERT INTO posts(sha256, ext, mime) VALUES ('fv', 'png', 'image/png')").lastrowid
+    cl = TestClient(create_app())
+    page = cl.get(f"/post/{pid}").text
+    assert '<form id="favform" action="/post/' in page and "e.preventDefault()" in page[page.index('id="favform"'):]
+    cl.post(f"/post/{pid}/favorite")
+    with core.connect() as c:
+        assert c.execute("SELECT favorite FROM posts WHERE id=?", (pid,)).fetchone()[0] == 1
+
+
+def test_save_tags_and_file_delete_reload_in_place(env, monkeypatch):
+    from fastapi.testclient import TestClient
+    from minibooru.web import create_app
+    monkeypatch.delenv("MINIBOORU_PASSWORD", raising=False)
+    with core.connect() as c:
+        pid = c.execute("INSERT INTO posts(sha256, ext, mime) VALUES ('st', 'png', 'image/png')").lastrowid
+    page = TestClient(create_app()).get(f"/post/{pid}?view=images").text
+    assert '<form class="panel samepage" action="/post/' in page and "location.replace(location.href)" in page
+
+
+def test_words_that_are_not_tags_search_titles(env, monkeypatch):
+    from fastapi.testclient import TestClient
+    from minibooru.web import create_app
+    monkeypatch.delenv("MINIBOORU_PASSWORD", raising=False)
+    with core.connect() as c:
+        def mk(title, tags):
+            pid = c.execute("INSERT INTO posts(sha256, ext, mime, title) VALUES (?, 'png', 'image/png', ?)", (title, title)).lastrowid
+            core.add_tags(c, pid, tags)
+            return pid
+        a, b, d = mk("Sunset over the Lake", ["robin"]), mk("Lake at noon", ["sparrow"]), mk("Mountain 100%_view", ["robin"])
+    def ids(q):
+        with core.connect() as c:
+            return sorted(r["id"] for r in core.search(c, q)[0])
+    assert ids("lake") == sorted([a, b])                     # not a tag: matched in titles (any case)
+    assert ids("robin lake") == [a]                          # a tag and a title word together
+    assert ids("lake -sunset") == [b]                        # -word that isn't a tag hides titles with it
+    assert ids("robin -lake") == [d]
+    assert ids("100%_view") == [d] and ids("100") == [d] and ids("x%y") == []   # % and _ are taken literally
+    assert ids("nothing_here") == []
+    cl = TestClient(create_app())
+    assert "No tag named <b>lake</b>, so that word was looked for in post titles instead." in cl.get("/", params={"q": "robin lake"}).text
+    assert "No tag named" not in cl.get("/", params={"q": "robin"}).text
