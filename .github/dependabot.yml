@@ -1,0 +1,14 @@
+# opens a pull request when a newer version of a dependency is out (the tests run on it before you merge)
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule: {interval: monthly}
+    groups:
+      python: {patterns: ["*"]}
+  - package-ecosystem: docker
+    directory: "/"
+    schedule: {interval: monthly}
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: {interval: monthly}

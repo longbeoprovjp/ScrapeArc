@@ -148,7 +148,7 @@ def create_app(scheduler: bool = False) -> FastAPI:
     app = FastAPI(docs_url=None, redoc_url=None)
     password = os.environ.get("MINIBOORU_PASSWORD")
     if password and password.strip() in PLACEHOLDER_PASSWORDS:
-        raise SystemExit("MINIBOORU_PASSWORD is still the example value: set your own password in .env.minibooru")
+        raise SystemExit("MINIBOORU_PASSWORD is still the example value: set your own password (in docker-compose.yml, or .env.minibooru if you build from source)")
     jobs: dict[str, dict] = {}
     brand: dict = {}                      # this install's name and icon version (shown on every page)
 

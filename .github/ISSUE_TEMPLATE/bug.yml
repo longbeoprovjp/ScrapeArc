@@ -1,0 +1,33 @@
+name: Something doesn't work
+description: A bug, an error, or something that behaves differently than the docs say
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations: {required: true}
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to see it
+      placeholder: "1. Open the Scrape page\n2. ...\n3. ..."
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The image tag you run (e.g. 1.0.0), or the commit if you built it yourself
+  - type: textarea
+    id: setup
+    attributes:
+      label: Where it runs
+      placeholder: "Debian 12 VM / Raspberry Pi / ... · browser and device"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines
+      description: "From `docker compose logs --tail=100`. Remove site addresses, keywords or anything private first."
+      render: text
+  - type: markdown
+    attributes:
+      value: "If a scrape of a particular site misbehaves, please don't post copyrighted content or private links; describe the page structure instead."

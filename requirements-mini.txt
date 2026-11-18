@@ -1,9 +1,10 @@
-fastapi
-uvicorn
-python-multipart
-jinja2
-pillow
-gallery-dl
-pytest
-httpx
-beautifulsoup4
+# pinned to the versions the test suite passes with; Dependabot proposes updates (.github/dependabot.yml)
+fastapi==0.162.5
+uvicorn==0.54.0
+python-multipart==0.0.33
+jinja2==3.1.6
+pillow==13.0.0
+gallery-dl==1.32.20
+pytest==9.2.0
+httpx==0.28.1
+beautifulsoup4==4.15.0

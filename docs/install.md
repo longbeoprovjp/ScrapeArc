@@ -33,8 +33,23 @@ Log out and back in (the group change only applies to new logins). Then check th
 
 ## 2. Get the project
 
+**The easy way: the ready-made image.** Nothing to build; it runs on amd64 PCs and arm64 boards (Raspberry Pi 4/5).
+
 ```
-git clone https://github.com/<you>/<repo>.git ~/scrapearc
+mkdir -p ~/scrapearc/data && cd ~/scrapearc
+curl -O https://raw.githubusercontent.com/longbeoprovjp/ScrapeArc/main/docker-compose.yml
+nano docker-compose.yml        # set MINIBOORU_PASSWORD; change ./data or the user id if you like
+docker compose up -d
+```
+Open `http://<this-machine>:8090` and log in as `admin`. That's all: skip to [step 5](#5-day-to-day). Update later
+with `docker compose pull && docker compose up -d`.
+The settings table below explains the same options; in this file they are written directly under `environment:`,
+`ports:` and `volumes:`.
+
+**From the source code** (to change the code, or if you prefer building it yourself):
+
+```
+git clone https://github.com/longbeoprovjp/ScrapeArc.git ~/scrapearc
 cd ~/scrapearc
 ```
 

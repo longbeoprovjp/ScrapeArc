@@ -1,10 +1,19 @@
 # ScrapeArc
 
+[![tests](https://github.com/longbeoprovjp/ScrapeArc/actions/workflows/tests.yml/badge.svg)](https://github.com/longbeoprovjp/ScrapeArc/actions/workflows/tests.yml)
+[![image](https://github.com/longbeoprovjp/ScrapeArc/actions/workflows/image.yml/badge.svg)](https://github.com/longbeoprovjp/ScrapeArc/pkgs/container/scrapearc)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A self-hosted photo and video archive with a scraper built in. Point it at a website's listing page, choose
 keywords, and it saves matching posts with their pictures, titles, upload dates and tags into a private, searchable
 gallery that you open from any device on your network.
 
 One Docker container, one data folder, no database server.
+
+**Who it's for:** people who follow pictures and videos on a few sites and want their own private, searchable copy
+of the ones they care about, on their own computer, without running a database server or writing site-specific code.
+
+<p align="center"><img src="docs/screenshots/demo.gif" width="88%" alt="Searching with tag suggestions, opening a post, going back to the list, favorites and stats"></p>
 
 <p align="center">
   <img src="docs/screenshots/gallery.jpg" width="66%" alt="The gallery">
@@ -32,18 +41,34 @@ One Docker container, one data folder, no database server.
 
 ## Quick start
 
-You need Docker with the Compose plugin.
+You need Docker with the Compose plugin. The ready-made image runs on regular PCs (amd64) and ARM boards such as a
+Raspberry Pi 4/5 (arm64).
 
 ```
-git clone https://github.com/<you>/<repo>.git scrapearc && cd scrapearc
-cp .env.minibooru.example .env.minibooru
-nano .env.minibooru            # set MINIBOORU_PASSWORD and MINIBOORU_DATA_DIR (an absolute path)
-make up                        # = docker compose ... up -d --build
+mkdir scrapearc && cd scrapearc && mkdir data
+curl -O https://raw.githubusercontent.com/longbeoprovjp/ScrapeArc/main/docker-compose.yml
+nano docker-compose.yml        # set MINIBOORU_PASSWORD (the app won't start with the example one)
+docker compose up -d
 ```
 
 Open `http://<this-machine>:8090`, log in with user `admin` and your password, and pick a name and icon.
+Update later with `docker compose pull && docker compose up -d`.
 
-Without Docker (for development): `python -m venv .venv && .venv/bin/pip install -r requirements-mini.txt && make dev`.
+To build from the source code instead, see [Installing with Docker](docs/install.md). Without Docker (for
+development): `python -m venv .venv && .venv/bin/pip install -r requirements-mini.txt && make dev`.
+
+## How it compares
+
+| | ScrapeArc | gallery-dl | Hydrus Network | szurubooru | Immich / PhotoPrism |
+|---|---|---|---|---|---|
+| What it is | Web gallery + scraper | Command-line downloader | Desktop media manager | Web image board | Personal photo library |
+| Downloads from sites | Yes, any listing page (no per-site code) | Yes, per-site extractors | Yes, per-site downloaders | No | No (phone backup) |
+| Sites that need a login | Bookmark / toolbar button in your own browser | Cookies or passwords in its config | Cookies | n/a | n/a |
+| Browse and search | Web app, phones included | No (files on disk) | Desktop app | Web app | Web and phone apps |
+| What it needs | One container, SQLite | Python | Desktop PC | Several containers + PostgreSQL | A server with a database |
+
+They're all good at what they do. ScrapeArc is for when you want the downloading and the browsing in one small
+self-hosted app.
 
 ## Guides
 

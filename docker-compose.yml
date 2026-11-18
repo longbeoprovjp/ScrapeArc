@@ -1,0 +1,19 @@
+# ScrapeArc: the quick way. Put this file in an empty folder, change the two lines marked EDIT, then run
+#   docker compose up -d
+# and open http://<this-machine>:8090 (user "admin"). Updates: docker compose pull && docker compose up -d
+# (To build from the source code instead, see docker-compose.minibooru.yml and docs/install.md.)
+services:
+  scrapearc:
+    image: ghcr.io/longbeoprovjp/scrapearc:latest
+    container_name: scrapearc
+    restart: unless-stopped
+    user: "1000:1000"                     # `id -u`:`id -g` of the user who should own the files in ./data
+    environment:
+      MINIBOORU_PASSWORD: change-me-to-something-long   # EDIT: your login password (the app won't start with this one)
+      MINIBOORU_SLEEP: "2"                # seconds between scraper requests; please don't go lower
+      TZ: UTC
+    ports:
+      - "8090:8090"                       # "127.0.0.1:8090:8090" = only this machine (e.g. behind Tailscale)
+    volumes:
+      - ./data:/data                      # EDIT if you like: where the database, pictures and videos are kept.
+                                          # Create the folder first (mkdir data), or Docker makes it owned by root.

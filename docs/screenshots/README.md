@@ -5,6 +5,7 @@ dark mode, with the author's photos as backgrounds. Retake them the same way if 
 
 | File | What it shows |
 |---|---|
+| `demo.gif` | 14 seconds: search with tag suggestions, a post, Next, back to the list, Favorites, Stats (960 px, ~1.5 MB) |
 | `gallery.jpg` | The front page: filter buttons, posts per row, tags under posts |
 | `post.jpg` | A post with several files, its tags and the ← Prev / ▦ List / Next → bar |
 | `upload.jpg` | The upload window |
