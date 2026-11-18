@@ -1,14 +1,20 @@
-# opens a pull request when a newer version of a dependency is out (the tests run on it before you merge)
+# Every 3 months, Dependabot checks for newer versions of what the app is built with and opens ONE pull request per
+# kind (Python packages, the Docker base image, the GitHub build steps), with all updates of that kind together.
+# The tests run on each request automatically; merge it if they pass.
 version: 2
 updates:
   - package-ecosystem: pip
     directory: "/"
-    schedule: {interval: monthly}
+    schedule: {interval: quarterly}
     groups:
-      python: {patterns: ["*"]}
+      python-packages: {patterns: ["*"]}
   - package-ecosystem: docker
     directory: "/"
-    schedule: {interval: monthly}
+    schedule: {interval: quarterly}
+    groups:
+      base-image: {patterns: ["*"]}
   - package-ecosystem: github-actions
     directory: "/"
-    schedule: {interval: monthly}
+    schedule: {interval: quarterly}
+    groups:
+      build-steps: {patterns: ["*"]}
