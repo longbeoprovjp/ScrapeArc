@@ -106,3 +106,23 @@ def test_uploading_a_file_already_scraped_doesnt_mark_it_as_upload(data):
         pid, status = core.ingest(c, data / "same.png", ["phone", core.UPLOAD_TAG], source="upload")
         assert (pid, status) == (scraped, "duplicate")
         assert tags(c, scraped) == ["cat", "phone"]
+
+
+def test_review_page_opens_on_the_matching_picture(data):
+    from minibooru.web import create_app
+    from PIL import ImageDraw
+    with core.connect() as c:
+        Image.new("RGB", (60, 60), "red").save(data / "a1.png")
+        im = Image.new("RGB", (300, 300), "white")
+        ImageDraw.Draw(im).ellipse([50, 60, 240, 200], fill="black")
+        im.save(data / "a2.png")
+        multi = core.ingest(c, data / "a1.png", [], source="https://example.com/p/1")[0]
+        core.add_media(c, multi, data / "a2.png")
+        im.resize((150, 150)).save(data / "one.png")
+        single = core.ingest(c, data / "one.png", [core.UPLOAD_TAG], source="upload")[0]
+        a, b = sorted((multi, single))
+        c.execute("INSERT OR IGNORE INTO dup_flags(a, b, dist) VALUES (?,?,0)", (a, b))
+    r = TestClient(create_app()).get("/dups/review")
+    assert r.status_code == 200
+    assert "closest match" in r.text and 'Picture <span class="dno">2</span> of 2' in r.text
+    assert r.text.count('data-i="') == 2                   # every picture of the multi-file post is listed

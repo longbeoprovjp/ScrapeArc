@@ -610,6 +610,29 @@ def resolve_duplicate(c, keep: int, drop: int, data=None) -> bool:
     return True
 
 
+def _img_hash(c, sha: str):
+    """The stored 64-bit picture fingerprint of a file, or None (video, not fingerprinted, or a flat picture)."""
+    r = c.execute("SELECT hashes FROM fingerprints WHERE sha256=? AND kind='image'", (sha,)).fetchone()
+    if not r or not r[0]:
+        return None
+    h = int(r[0].split()[0], 16)
+    return h if similar.informative(h) else None
+
+
+def closest_files(c, fa: list, fb: list):
+    """(i, j, distance) of the two most alike pictures between two posts' file lists (post_files), or None."""
+    hb = [_img_hash(c, f["sha"]) if f["is_image"] else None for f in fb]
+    best = None
+    for i, f in enumerate(fa):
+        ha = _img_hash(c, f["sha"]) if f["is_image"] else None
+        if ha is None:
+            continue
+        for j, h in enumerate(hb):
+            if h is not None and (best is None or (ha ^ h).bit_count() < best[2]):
+                best = (i, j, (ha ^ h).bit_count())
+    return best
+
+
 SURE_MAX_DIST = 2   # of 64 fingerprint bits; IMG_MAX_DIST (5) flags a pair, this close counts as certain
 
 

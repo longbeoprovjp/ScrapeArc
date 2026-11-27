@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Duplicate review** lists every picture of both posts; click one to see it big. It opens on the two closest
+  pictures, so a single picture's match inside a post with several files is in front of you.
 - The image now uses Python 3.15 (was 3.12) and FastAPI 0.163.1; build tooling updated.
 - **Send from the iPhone's Photos app**: a page linked from the upload window sets up an Apple Shortcut in the share
   sheet. It uses a private upload key (only allows adding files; make a new one any time) instead of the login.

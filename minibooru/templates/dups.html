@@ -9,8 +9,9 @@
 <div class="dpair">{% for s in sides %}{% set p = s.p %}
 <div class="dside{{ ' hint' if hint == loop.index0 }}">
 <a href="/post/{{ p.id }}" target="_blank" rel="noopener" class="dmain" title="Open the post in a new tab">
-{% set f = s.files[0] %}{% if f.is_image %}<img src="{{ f.url }}" alt="">{% else %}<img src="{{ f.thumb }}" alt=""><span class="badge">▶ video</span>{% endif %}</a>
-{% if s.files|length > 1 %}<div class="dthumbs">{% for f in s.files[1:7] %}<img src="{{ f.thumb }}" alt="" loading="lazy">{% endfor %}{% if s.files|length > 7 %}<span class="mut">+{{ s.files|length - 7 }}</span>{% endif %}</div>{% endif %}
+{% set f = s.files[s.sel] %}<img class="dimg" src="{{ f.url if f.is_image else f.thumb }}" alt=""><span class="badge dvid"{% if f.is_image %} hidden{% endif %}>▶ video</span></a>
+<div class="mut dcap">{% if s.files|length > 1 %}Picture <span class="dno">{{ s.sel + 1 }}</span> of {{ s.files|length }} · {% endif %}<span class="dres">{{ f.w }}×{{ f.h }}</span>{% if matched and s.files|length > 1 %}<span class="dmatch"> · closest match</span>{% endif %}</div>
+{% if s.files|length > 1 %}<div class="dthumbs">{% for g in s.files %}<button type="button" class="dth{{ ' on' if loop.index0 == s.sel }}" data-i="{{ loop.index0 }}" data-src="{{ g.url if g.is_image else g.thumb }}" data-img="{{ 1 if g.is_image else 0 }}" data-res="{{ g.w }}×{{ g.h }}" title="Show picture {{ loop.index }} bigger"><img src="{{ g.thumb }}" alt="" loading="lazy">{% if not g.is_image %}<span>▶</span>{% endif %}</button>{% endfor %}</div>{% endif %}
 <div class="dinfo">
 <div><b>#{{ p.id }} {{ p.title or 'Untitled' }}</b>{% if p.favorite %} ★{% endif %}{% if hint == loop.index0 %} <span class="dsug">suggested</span>{% endif %}</div>
 <div class="mut">{{ p.width }}×{{ p.height }} · {{ s.files|length }} file{{ '' if s.files|length == 1 else 's' }} · {{ s.tags|length }} tag{{ '' if s.tags|length == 1 else 's' }}{% if s.host %} · {{ s.host }}{% endif %}</div>
@@ -28,6 +29,11 @@ const url=k==='both'?'/post/'+A+'/dup/'+Bid+'/dismiss':k==='left'?'/post/'+Bid+'
 try{const r=await fetch(url,{method:'POST',credentials:'same-origin'});if(!r.ok)throw new Error('HTTP '+r.status);
 try{sessionStorage.setItem('mb-stale','1')}catch(x){}go(skip)}catch(e){busy=false;msg.textContent='Could not save: '+e.message}}
 document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>act(b.dataset.act));
+document.querySelectorAll('.dside').forEach(side=>{const sel0=side.querySelector('.dth.on');const first=sel0?+sel0.dataset.i:0;
+  side.querySelectorAll('.dth').forEach(t=>t.onclick=()=>{side.querySelectorAll('.dth').forEach(x=>x.classList.toggle('on',x===t));
+    side.querySelector('.dimg').src=t.dataset.src;side.querySelector('.dvid').hidden=t.dataset.img==='1';
+    const no=side.querySelector('.dno');if(no)no.textContent=+t.dataset.i+1;side.querySelector('.dres').textContent=t.dataset.res;
+    const m=side.querySelector('.dmatch');if(m)m.hidden=+t.dataset.i!==first})});
 document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,select')||e.ctrlKey||e.metaKey||e.altKey)return;
 const k={ArrowLeft:'left',ArrowRight:'right',b:'both',B:'both',s:'skip',S:'skip'}[e.key];if(k){e.preventDefault();act(k)}});
 })();
@@ -40,7 +46,11 @@ const k={ArrowLeft:'left',ArrowRight:'right',b:'both',B:'both',s:'skip',S:'skip'
 .dside.hint{border-color:color-mix(in srgb,var(--acc) 60%,transparent)}
 .dmain{display:block;position:relative;background:color-mix(in srgb,var(--fg) 6%,transparent);border-radius:calc(var(--radius) - 4px);overflow:hidden}
 .dmain img{display:block;width:100%;height:min(56vh,620px);object-fit:contain}
-.dthumbs{display:flex;gap:4px;flex-wrap:wrap;align-items:center}.dthumbs img{width:44px;height:44px;object-fit:cover;border-radius:6px}
+.dthumbs{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.dth{position:relative;padding:0;border:2px solid transparent;border-radius:8px;background:none;cursor:pointer;line-height:0}
+.dth img{width:56px;height:56px;object-fit:cover;border-radius:6px}.dth.on{border-color:var(--acc)}
+.dth span{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:16px;line-height:1;text-shadow:0 1px 3px #000}
+.dcap{font-size:13px}.dmatch{color:var(--dsaved);font-weight:600}
 .dinfo{display:flex;flex-direction:column;gap:2px;min-width:0}.dinfo b{overflow-wrap:anywhere}
 .dsug{font-size:12px;font-weight:600;color:var(--btnfg);background:var(--btn);border-radius:999px;padding:1px 8px}
 .dkeep{margin-top:auto}

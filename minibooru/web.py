@@ -713,13 +713,20 @@ def create_app(scheduler: bool = False) -> FastAPI:
                     host = re.sub(r"^https?://(www\.)?", "", p["source"] or "").split("/")[0]
                     sides.append({"p": p, "files": files, "tags": core.post_tags(c, pid), "host": host,
                                   "pixels": (p["width"] or 0) * (p["height"] or 0)})
+        match = None
+        if sides:   # open each side on its picture closest to the other side (a multi-file post's match may be its 5th)
+            with core.connect() as c:
+                match = core.closest_files(c, sides[0]["files"], sides[1]["files"])
+            for i, s_ in enumerate(sides):
+                s_["sel"] = match[i] if match else 0
         hint = None
         if sides:   # a nudge only: the bigger picture, then the one with more files, then more tags
             score = [(s["pixels"], len(s["files"]), len(s["tags"])) for s in sides]
             if score[0] != score[1]:
                 hint = 0 if score[0] > score[1] else 1
         return tpl.TemplateResponse(request, "dups.html", {"sides": sides, "dist": row["dist"] if row else None,
-                                                           "total": total, "skip": skip, "hint": hint})
+                                                           "total": total, "skip": skip, "hint": hint,
+                                                           "matched": bool(match)})
 
     @app.post("/posts/bulk-merge")
     def post_bulk_merge(ids: list[int] = Form([]), next: str = Form("/")):
