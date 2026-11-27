@@ -7,6 +7,7 @@
 {% include "_pager.html" %}
 <dialog id="updlg"><div class="in">
 <h3>Upload</h3>
+<p class="note" id="up-standalone" hidden>On iPhone, picking files doesn't work in the Home Screen app (it comes back with nothing chosen). Open this site in Safari to upload. <button type="button" class="ghost" id="up-copy">Copy address</button></p>
 <form action="/upload" method="post" enctype="multipart/form-data" id="upform">
 <label class="drop" id="drop"><input type="file" name="files" multiple required accept="image/*,video/*" id="upfiles">
 <b>Choose pictures or videos</b><span class="mut" id="dropn">or drop them here</span></label>
@@ -21,6 +22,11 @@
 const form=document.getElementById('upform'),prog=document.getElementById('upprog'),bar=document.getElementById('upbar'),
 msg=document.getElementById('upmsg'),go=document.getElementById('up-go'),cancel=document.getElementById('up-cancel');
 let busy=false,stop=false,xhr=null;
+if(navigator.standalone===true){   // iOS Home Screen app only: its file picker is unreliable
+  const note=document.getElementById('up-standalone'),cp=document.getElementById('up-copy');note.hidden=false;
+  cp.onclick=()=>{const done=()=>{cp.textContent='Copied: paste it in Safari'};
+    if(navigator.clipboard)navigator.clipboard.writeText(location.origin+'/').then(done,()=>{cp.textContent=location.origin});
+    else cp.textContent=location.origin}}
 document.getElementById('up-open').onclick=()=>d.showModal();
 cancel.onclick=()=>{if(busy){stop=true;if(xhr)xhr.abort()}else d.close()};
 d.addEventListener('click',e=>{if(e.target===d&&!busy)d.close()});
