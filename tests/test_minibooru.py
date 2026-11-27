@@ -630,9 +630,11 @@ def test_upload_in_chunks_skips_empty_files(env, tmp_path, monkeypatch):
     r = cl.post("/upload", data={"together": "1", "ajax": "1"}, files=[f("red"), ("files", ("gone.jpg", b"", "image/jpeg"))]).json()
     assert r["added"] == 1 and r["empty"] == ["gone.jpg"] and r["post"]
     r2 = cl.post("/upload", data={"together": "1", "ajax": "1", "into": str(r["post"])}, files=[f("blue"), blank]).json()
-    assert r2 == {"post": r["post"], "added": 1, "empty": ["(no name)"], "bad": []}
+    assert r2 == {"post": r["post"], "added": 1, "dup": 0, "empty": ["(no name)"], "bad": []}
     with core.connect() as c:
         assert len(core.post_files(c, r["post"])) == 2 and c.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 1
+    again = cl.post("/upload", data={"ajax": "1", "tags": "new_tag"}, files=[f("red"), f("purple")]).json()
+    assert (again["added"], again["dup"]) == (2, 1)                          # red was saved before: counted, not saved twice
     bad = cl.post("/upload", data={"ajax": "1"}, files=[("files", ("x.txt", b"hi", "text/plain")), f("green")]).json()
     assert bad["added"] == 1 and bad["bad"] == ["x.txt"]
     r = cl.post("/upload", files=[blank], follow_redirects=False)              # plain form, nothing usable: clear message

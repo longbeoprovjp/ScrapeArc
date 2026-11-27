@@ -677,7 +677,7 @@ def create_app(scheduler: bool = False) -> FastAPI:
         tags, title, together = (str(form.get(k, "")) for k in ("tags", "title", "together"))
         ajax = form.get("ajax") == "1"
         parts = [v for k, v in form.multi_items() if k == "files" and hasattr(v, "read")]
-        pid, added, bad = None, 0, []
+        pid, added, dup, bad = None, 0, 0, []   # dup: files already in the archive (same contents)
         empty = ["(no name)" for k, v in form.multi_items() if k == "files" and not hasattr(v, "read")]  # nameless empty slot
         with core.connect() as c, tempfile.TemporaryDirectory() as tmp:
             into = str(form.get("into", ""))
@@ -691,18 +691,22 @@ def create_app(scheduler: bool = False) -> FastAPI:
                 if not dest.stat().st_size:
                     empty.append(f.filename or "(no name)")
                     continue
+                sha = core.file_sha(dest)
+                known = c.execute("SELECT 1 FROM posts WHERE sha256=? UNION ALL SELECT 1 FROM post_media WHERE sha256=? LIMIT 1",
+                                  (sha, sha)).fetchone()
                 try:
                     if together and pid is not None:
                         core.add_media(c, pid, dest)
                     else:
                         pid, _ = core.ingest(c, dest, tags.split() + [core.UPLOAD_TAG], title=title or dest.stem, source="upload")
                     added += 1
+                    dup += bool(known)
                 except ValueError as e:
                     if not ajax:
                         raise HTTPException(400, str(e))
                     bad.append(f.filename or "(no name)")
         if ajax:
-            return JSONResponse({"post": pid, "added": added, "empty": empty, "bad": bad})
+            return JSONResponse({"post": pid, "added": added, "dup": dup, "empty": empty, "bad": bad})
         if not added:
             raise HTTPException(400, "No files arrived: the browser sent the form without them. On an iPhone this "
                                      "happens when photos are still in iCloud or the selection is too big. Try fewer at once.")

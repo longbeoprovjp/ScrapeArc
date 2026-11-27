@@ -51,13 +51,13 @@ form.addEventListener('submit',async e=>{
   busy=true;stop=false;go.disabled=true;cancel.textContent='Stop';prog.hidden=false;
   form.querySelectorAll('input').forEach(i=>i.disabled=true);
   const total=files.reduce((s,x)=>s+x.size,0),together=form.elements.together.checked;
-  let doneBytes=0,done=0,post=null,lost=[...empty.map(x=>x.name)],bad=[];
+  let doneBytes=0,done=0,dupN=0,post=null,lost=[...empty.map(x=>x.name)],bad=[];
   const show=extra=>{bar.value=total?Math.min(1,(doneBytes+extra)/total):1;
     msg.textContent=done+' of '+plural(files.length,'file')+' uploaded ('+Math.round(100*bar.value)+'%)'};
   let failsInRow=0,gaveUp=false,lastErr='';
   async function tryUp(list){            // two tries, then one file at a time so only the bad files are lost
     for(let attempt=0;attempt<2&&!stop;attempt++){
-      try{const r=await send(list,post,show);post=post||r.post;done+=list.length-r.empty.length-r.bad.length;failsInRow=0;
+      try{const r=await send(list,post,show);post=post||r.post;done+=list.length-r.empty.length-r.bad.length;dupN+=r.dup||0;failsInRow=0;
         lost.push(...r.empty);bad.push(...r.bad);doneBytes+=list.reduce((s,x)=>s+x.size,0);show(0);return}
       catch(err){lastErr=err.message;if(stop)return}}
     if(stop)return;
@@ -68,9 +68,9 @@ form.addEventListener('submit',async e=>{
   for(const part of chunks(files)){if(stop)break;await tryUp(part)}
   busy=false;xhr=null;
   const dest=together&&post?'/post/'+post:'/';
-  if(!stop&&!lost.length&&!bad.length){location.href=dest;return}
   let t=(gaveUp?'Stopped: the last 5 files all failed ('+lastErr+'). Reload the page and pick the files again; '+
-    'if they were in Files, check they are still there. ':stop?'Stopped. ':'')+plural(done,'file')+' uploaded.';
+    'if they were in Files, check they are still there. ':stop?'Stopped. ':'')+
+    plural(files.length+empty.length,'file')+' picked: '+(done-dupN)+' new'+(dupN?', '+dupN+' already in the archive (not saved again'+(form.elements.tags.value.trim()&&!together?'; your tags were added to them':'')+')':'')+'.';
   const untried=files.length-done-(lost.length-empty.length)-bad.length;
   if(stop&&untried>0)t+=' '+plural(untried,'file')+(untried==1?' wasn\'t':' weren\'t')+' tried.';
   if(lost.length)t+=' '+plural(lost.length,'file')+' didn\'t arrive (empty or the connection failed): '+lost.slice(0,5).join(', ')+(lost.length>5?' and '+(lost.length-5)+' more':'')+'.';
