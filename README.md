@@ -79,7 +79,7 @@ self-hosted app.
 | [Scraping](docs/scraping.md) | Run once, auto rescan, single posts, start page, selectors |
 | [The "Save to …" bookmark](docs/bookmark.md) | Saving posts from sites that need a login |
 | [HTTPS and access from anywhere](docs/remote-access.md) | Tailscale setup |
-| [Encrypted data drive](docs/encrypted-drive.md) | Optional: keep the archive on a LUKS-encrypted disk |
+| [Encrypted data drive](docs/encrypted-drive.md) | Optional: keep the archive on a LUKS-encrypted disk, unlocked at boot by the TPM chip |
 | [Security](docs/security.md) | What is protected and how, and what you should do |
 | [Development](minibooru/README.md) | Code layout, tests, adding import sources |
 

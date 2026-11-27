@@ -1,0 +1,47 @@
+{% extends "base.html" %}{% block title %}iPhone Shortcut · {{ brand.name }}{% endblock %}{% block body %}
+<style>
+.sc{max-width:44em}.sc ol{padding-left:1.4em}.sc li{margin:0 0 12px}.sc code{background:color-mix(in srgb,var(--fg) 12%,transparent);padding:1px 6px;border-radius:4px;word-break:break-all}
+.sc .kv{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.sc .kv code{flex:1 1 16em;padding:6px 8px}
+.sc ul{padding-left:1.2em;margin:6px 0}
+</style>
+<div class="sc">
+<h2>Send to {{ brand.name }} from the iPhone</h2>
+<p>Set this up once in Apple's <b>Shortcuts</b> app. Then in Photos (or Files) pick pictures or videos, tap the share button and choose
+<b>Send to {{ brand.name }}</b>. No Safari, no file picker. The phone must be able to reach this server (for example with Tailscale on).</p>
+
+<p><b>Address</b></p>
+<div class="kv"><code id="sc-url">/upload</code><button type="button" class="ghost" data-copy="sc-url">Copy</button></div>
+<p><b>Upload key</b> <span class="mut">(keep it private: with it, anyone who can reach this server can add files, though they can't see or delete anything)</span></p>
+<div class="kv"><code id="sc-key">{{ key }}</code><button type="button" class="ghost" data-copy="sc-key">Copy</button></div>
+
+<h3>Make the Shortcut</h3>
+<ol>
+<li>Open <b>Shortcuts</b>, tap <b>＋</b>, and name it <b>Send to {{ brand.name }}</b>.</li>
+<li>Tap the <b>ⓘ</b> (or the arrow next to the name, then Details) and turn on <b>Show in Share Sheet</b>. Under what it accepts, keep
+<b>Images</b>, <b>Media</b> and <b>Files</b>.</li>
+<li>Add the action <b>Repeat with Each</b> and set it to repeat with each item in <b>Shortcut Input</b>.</li>
+<li>Inside the repeat, add <b>Get Contents of URL</b>:
+<ul>
+<li>URL: paste the <b>address</b> above.</li>
+<li>Tap <b>Show More</b>. Method: <b>POST</b>.</li>
+<li>Headers: add one. Key <code>X-Upload-Key</code>, value: paste the <b>upload key</b>.</li>
+<li>Request Body: <b>Form</b>. Add a field of type <b>File</b>. Key <code>files</code>, value <b>Repeat Item</b>.</li>
+<li>Optional tags: add a <b>Text</b> field, key <code>tags</code>, value like <code>phone</code> (space between tags).</li>
+</ul></li>
+<li>After <b>End Repeat</b>, add <b>Show Notification</b> and put <b>Repeat Results</b> in it. It shows the server's answer for each
+file, like "1 new" or "1 already in the archive".</li>
+</ol>
+<p class="mut">iPhone photos (HEIC) are turned into JPEG on arrival, so every browser can show them. Videos are kept as they are.
+Photos only stored in iCloud must download to the phone first. If one doesn't, the answer says "didn't arrive".</p>
+
+<h3>New key</h3>
+<p class="mut">If the key got out, make a new one. The old one stops working right away, so paste the new one into the Shortcut's header.</p>
+<form method="post" action="/upload/shortcut/new-key" onsubmit="return confirm('Make a new key? The Shortcut stops working until you paste the new one.')"><button class="ghost">Make a new key</button></form>
+</div>
+<script>
+document.getElementById('sc-url').textContent=location.origin+'/upload';   // the address the phone uses, not the server's inside one
+document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{const t=document.getElementById(b.dataset.copy).textContent;
+  const done=()=>{b.textContent='Copied'};
+  if(navigator.clipboard)navigator.clipboard.writeText(t).then(done,()=>prompt('Copy this:',t));else prompt('Copy this:',t)});
+</script>
+{% endblock %}

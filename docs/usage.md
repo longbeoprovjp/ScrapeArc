@@ -34,8 +34,12 @@ screen; add a background picture in Customize if you like.
 ![Uploading](screenshots/upload.jpg)
 
 Press **＋ Upload** at the top of the gallery, then choose files or drop them on the box, and type tags separated by
-spaces. Tick **put all the files in one post** to keep them together; otherwise each file becomes its own post. Pictures and videos are accepted (not iPhone
-HEIC: export those as JPEG).
+spaces. Tick **put all the files in one post** to keep them together; otherwise each file becomes its own post. Pictures and videos are accepted; iPhone
+HEIC photos are turned into JPEG on arrival.
+
+**From the iPhone's Photos app:** the upload window links to a page that walks you through a one-time Apple Shortcut
+("Send to …" in the share sheet). It uses a private upload key instead of your login, which only allows adding files.
+Make a new key on that page if it ever gets out.
 
 ## A post
 

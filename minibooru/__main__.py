@@ -25,6 +25,8 @@ def main():
     b.add_argument("--icon", help="picture file to use as the icon")
     b.add_argument("--reset-icon", action="store_true", help="go back to the default icon")
     args = ap.parse_args()
+    if args.cmd != "serve" and not core.data_ready():   # serve shows a "locked" page instead
+        sys.exit(f"The data folder {core.DATA} isn't unlocked (no {core.DATA_MARKER}): nothing done.")
     if args.cmd == "serve":
         import uvicorn
         from .web import create_app

@@ -81,6 +81,31 @@ sudo mkdir -p /mnt/scrapearc && sudo mount /dev/mapper/scrapearc /mnt/scrapearc
 Run `sudo reboot`. Afterwards, `df -h /mnt/scrapearc` must show `/dev/mapper/scrapearc`. If it shows the internal disk
 instead, the drive didn't unlock.
 
+To make the app refuse to start on an empty, not-yet-unlocked folder (instead of starting a new, empty archive
+there), add `MINIBOORU_DATA_REQUIRED=1` to `.env.minibooru`. It then shows a "data is locked" page instead, writes
+nothing, and stops after a minute so Docker restarts it and looks again. The archive is recognised by a
+`.scrapearc-data` file the app puts in the data folder (don't delete it). An existing archive gets it automatically.
+
+## Unlock with the TPM chip instead (no key file on the server)
+
+Most PCs from about 2017 on have a TPM 2.0 security chip (check: `ls /dev/tpm0`). It can hold the key, so the drive
+unlocks by itself at boot, also after a power cut, without a key file on the internal disk. Your passphrase keeps
+working as a backup.
+
+What it protects: someone who takes **only the drive** can't read it. Someone who takes **the whole computer** can,
+because it unlocks itself when switched on. The chip refuses after a BIOS/firmware update or a Secure Boot change;
+then unlock with the passphrase and add the chip again (last command below). Kernel and system updates don't affect it.
+```
+sudo apt install -y systemd-cryptsetup tpm2-tools
+sudo cryptsetup luksHeaderBackup /dev/sda3 --header-backup-file /root/scrapearc-header-before-tpm.img
+sudo systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs=7 /dev/sda3      # asks for the passphrase
+```
+In `/etc/crypttab`, replace `/root/scrapearc.key` with `none` and add `tpm2-device=auto` to the options
+(`scrapearc UUID=... none luks,nofail,tpm2-device=auto`), then `sudo systemctl daemon-reload` and test with
+`sudo reboot`. Once that works, delete `/root/scrapearc.key` (keep your off-server copy).
+If the chip ever refuses: unlock by hand (Troubleshooting below), then
+`sudo systemd-cryptenroll --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=7 /dev/sda3`.
+
 ## Troubleshooting
 
 If `make status` hangs after a reboot, the drive didn't unlock, so Docker is waiting for it. Press Ctrl+C, then:

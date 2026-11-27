@@ -9,6 +9,7 @@
 <span class="gridpick gp-desk nosel" data-k="colsd" title="Posts per row on this computer"><span class="mut">Per row</span><button type="button" data-v="">Auto</button><button type="button" data-v="4">4</button><button type="button" data-v="6">6</button><button type="button" data-v="8">8</button></span>
 <span class="gridpick gp-phone nosel" data-k="colsm" title="Posts per row on this phone"><span class="mut">Per row</span><button type="button" data-v="">Auto</button><button type="button" data-v="1">1</button><button type="button" data-v="2">2</button><button type="button" data-v="4">4</button></span>
 <span class="mut sel-only" id="sel-count">0 selected</span>
+<button type="button" class="ghost sel-only" id="sel-tags" disabled title="Add or remove tags on all the selected posts">🏷 Edit tags</button>
 <button class="sel-only" id="sel-merge" formaction="/posts/bulk-merge" disabled title="Put the selected posts together as one post, with all their files and tags">⧉ Merge into one</button>
 <button class="danger sel-only" id="sel-del" disabled>🗑 Delete selected</button>
 </div>
@@ -17,10 +18,21 @@
 <img loading="lazy" src="/thumbs/{{ p.sha256 }}.jpg" alt="{{ p.title }}" onerror="this.style.display='none'">{% if p.mime.startswith('video/') %}<span class="badge">▶ video</span>{% endif %}{% if p.dup %}<span class="badge" style="top:30px;background:#c77d00">⚠ dup</span>{% endif %}{% if p.nfiles > 1 %}<span class="badge" style="right:auto;left:6px" title="{{ p.nfiles }} files in this post">{{ p.nfiles }}</span>{% endif %}{% if p.favorite %}<span class="badge" style="right:auto;left:6px;top:30px">★</span>{% endif %}<span class="cap">{{ p.title }}</span></a>
 <div class="chips">{% set pt = ptags.get(p.id, []) %}{% for name, color in pt[:8] %}<a class="chip" style="--c:{{ color }}" href="/tag/{{ name|urlencode }}">{{ name }}</a>{% endfor %}{% if pt|length > 8 %}<a class="chip more" href="/post/{{ p.id }}">+{{ pt|length - 8 }}</a>{% endif %}</div></div>{% endfor %}</div>
 </form>
+<dialog id="tagdlg"><div class="in">
+<h3>Edit tags on <span id="tagdlg-n">0 posts</span></h3>
+<form method="post" action="/posts/bulk-tags" id="tagform" autocomplete="off">
+<input type="hidden" name="next" value="{{ here }}"><span id="tagform-ids"></span>
+<label class="mut" for="tag-add">Add these tags</label>
+<div style="position:relative;margin:4px 0 12px"><input name="add" id="tag-add" placeholder="tags, space separated" style="width:100%" autocapitalize="off" spellcheck="false"><ul class="tagsug" id="tag-add-sug" role="listbox" hidden></ul></div>
+<label class="mut" for="tag-rm">Remove these tags</label>
+<div style="position:relative;margin:4px 0 12px"><input name="remove" id="tag-rm" placeholder="tags, space separated" style="width:100%" autocapitalize="off" spellcheck="false"><ul class="tagsug" id="tag-rm-sug" role="listbox" hidden></ul></div>
+<p class="mut" id="tagdlg-err" hidden style="color:var(--danger)">Type at least one tag to add or remove.</p>
+<div class="row" style="justify-content:flex-end;margin:0"><button type="button" class="ghost" id="tagdlg-cancel">Cancel</button><button id="tagdlg-go">Save tags</button></div>
+</form></div></dialog>
 <script>
 (function(){const f=document.getElementById('bulk'),boxes=()=>[...f.querySelectorAll('.pick-box')];
 function upd(){const n=boxes().filter(b=>b.checked).length;f.querySelectorAll('.cell').forEach(c=>c.classList.toggle('on',c.querySelector('.pick-box').checked));
-document.getElementById('sel-count').textContent=n+' selected';document.getElementById('sel-del').disabled=!n;document.getElementById('sel-merge').disabled=n<2}
+document.getElementById('sel-count').textContent=n+' selected';document.getElementById('sel-del').disabled=!n;document.getElementById('sel-merge').disabled=n<2;document.getElementById('sel-tags').disabled=!n}
 let via=null;f.querySelectorAll('button[id^=sel-]').forEach(b=>b.addEventListener('click',()=>{via=b.id}));
 function mode(on){f.classList.toggle('selecting',on);if(!on)boxes().forEach(b=>b.checked=false);upd()}
 document.getElementById('sel-on').onclick=()=>mode(true);document.getElementById('sel-off').onclick=()=>mode(false);
@@ -34,6 +46,17 @@ function fresh(persisted){let changed=false;try{changed=sessionStorage.getItem(K
 window.addEventListener('pageshow',e=>fresh(e.persisted));
 f.addEventListener('click',e=>{if(!f.classList.contains('selecting'))return;const a=e.target.closest('.cell>a');if(!a)return;
 e.preventDefault();const b=a.parentElement.querySelector('.pick-box');b.checked=!b.checked;upd()});
+// Edit tags: its own form (so Enter in a tag box can never press Merge or Delete), filled with the ticked posts
+const td=document.getElementById('tagdlg'),tf=document.getElementById('tagform'),add=document.getElementById('tag-add'),rm=document.getElementById('tag-rm');
+mbTagSuggest(add,document.getElementById('tag-add-sug'));mbTagSuggest(rm,document.getElementById('tag-rm-sug'));
+document.getElementById('sel-tags').onclick=()=>{const ids=boxes().filter(b=>b.checked).map(b=>b.value);if(!ids.length)return;
+  const box=document.getElementById('tagform-ids');box.textContent='';
+  ids.forEach(v=>{const i=document.createElement('input');i.type='hidden';i.name='ids';i.value=v;box.appendChild(i)});
+  document.getElementById('tagdlg-n').textContent=ids.length+' post'+(ids.length==1?'':'s');
+  document.getElementById('tagdlg-err').hidden=true;td.showModal();add.focus()};
+document.getElementById('tagdlg-cancel').onclick=()=>td.close();
+tf.addEventListener('submit',e=>{if(!add.value.trim()&&!rm.value.trim()){e.preventDefault();document.getElementById('tagdlg-err').hidden=false;return}
+  try{sessionStorage.setItem(KEY,location.href)}catch(err){}});
 f.addEventListener('submit',e=>{const n=boxes().filter(b=>b.checked).length,merge=(e.submitter&&e.submitter.id||via)==='sel-merge';
 if(merge?(n<2||!confirm('Merge '+n+' posts into one? All their files and tags go into the one that comes first on this page (it keeps its title); the other '+(n-1)+' post'+(n==2?'':'s')+' disappear. No files are deleted.'))
 :(!n||!confirm('Permanently delete '+n+' post'+(n==1?'':'s')+(n==1?' and its files?':' and their files?')))){e.preventDefault();return}

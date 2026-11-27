@@ -3,6 +3,13 @@
 ## Unreleased
 
 - The image now uses Python 3.15 (was 3.12) and FastAPI 0.163.1; build tooling updated.
+- **Send from the iPhone's Photos app**: a page linked from the upload window sets up an Apple Shortcut in the share
+  sheet. It uses a private upload key (only allows adding files; make a new one any time) instead of the login.
+- iPhone **HEIC photos become JPEG** on upload, so every browser can show them.
+- **Select posts → Edit tags**: add and/or remove tags on all selected posts at once, with suggestions while typing.
+- **Locked-drive safety**: with `MINIBOORU_DATA_REQUIRED=1` the app won't start a new, empty archive in a data
+  folder whose encrypted drive isn't unlocked yet; it shows a "data is locked" page instead.
+- Docs: unlocking the encrypted drive with the TPM chip.
 
 ## 1.0.0
 

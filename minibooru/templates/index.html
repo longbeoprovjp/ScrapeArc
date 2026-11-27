@@ -7,7 +7,7 @@
 {% include "_pager.html" %}
 <dialog id="updlg"><div class="in">
 <h3>Upload</h3>
-<p class="note" id="up-standalone" hidden>On iPhone, picking files doesn't work in the Home Screen app (it comes back with nothing chosen). Open this site in Safari to upload. <button type="button" class="ghost" id="up-copy">Copy address</button></p>
+<p class="note" id="up-standalone" hidden>On iPhone, picking files doesn't work in the Home Screen app (it comes back with nothing chosen). Open this site in Safari to upload, or <a href="/upload/shortcut">send from the Photos app with a Shortcut</a>. <button type="button" class="ghost" id="up-copy">Copy address</button></p>
 <form action="/upload" method="post" enctype="multipart/form-data" id="upform">
 <label class="drop" id="drop"><input type="file" name="files" multiple required accept="image/*,video/*" id="upfiles">
 <b>Choose pictures or videos</b><span class="mut" id="dropn">or drop them here</span></label>
@@ -15,6 +15,7 @@
 <input name="title" placeholder="title (optional)" style="width:100%">
 <label class="mut" style="display:block;margin:10px 0"><input type="checkbox" name="together" value="1"> put all the files in one post</label>
 <div id="upprog" hidden style="margin:10px 0"><progress id="upbar" max="1" value="0" style="width:100%"></progress><p class="mut" id="upmsg" style="margin:6px 0 0"></p></div>
+<p class="mut" style="margin:0 0 10px;font-size:.9em">📱 <a href="/upload/shortcut">Send straight from the iPhone's Photos app</a> (share button → {{ brand.name }})</p>
 <div class="row" style="justify-content:flex-end;margin:0"><button type="button" class="ghost" id="up-cancel">Cancel</button><button id="up-go">Upload</button></div>
 </form></div></dialog>
 <script>

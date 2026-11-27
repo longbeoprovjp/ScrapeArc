@@ -218,6 +218,38 @@ def _migrate_upload_tag(c):
     c.execute("PRAGMA user_version = 3")
 
 
+DATA_MARKER = ".scrapearc-data"   # says "this folder is the real archive" (it's missing when the encrypted store is locked)
+
+
+def _has_posts(db: Path) -> bool:
+    """Read-only look: does this database hold at least one post? (Never creates the file.)"""
+    if not db.is_file():
+        return False
+    try:
+        c = sqlite3.connect(db.as_uri() + "?mode=ro", uri=True, timeout=5)
+        try:
+            return c.execute("SELECT 1 FROM posts LIMIT 1").fetchone() is not None
+        finally:
+            c.close()
+    except sqlite3.Error:
+        return False
+
+
+def data_ready(data=None) -> bool:
+    """False when MINIBOORU_DATA_REQUIRED is set and the data folder isn't the real archive (e.g. the server rebooted and
+    the encrypted store isn't unlocked yet, so the folder is missing or empty). Then nothing may be written there.
+    A folder that already holds posts gets the marker the first time; without the setting, a new install gets it too."""
+    base = Path(data) if data else DATA
+    if (base / DATA_MARKER).is_file():
+        return True
+    if not _has_posts(base / "db.sqlite") and os.environ.get("MINIBOORU_DATA_REQUIRED"):
+        return False
+    base.mkdir(parents=True, exist_ok=True)
+    (base / DATA_MARKER).write_text("This folder is the archive's data. The app refuses to start where this file is missing "
+                                    "(when MINIBOORU_DATA_REQUIRED is set). Don't delete it.\n")
+    return True
+
+
 @contextmanager
 def connect(data=None):
     base = Path(data) if data else DATA
@@ -338,6 +370,22 @@ def add_tags(c, post_id: int, tags) -> None:
 def set_tags(c, post_id: int, names) -> None:
     c.execute("DELETE FROM post_tags WHERE post_id=?", (post_id,))
     add_tags(c, post_id, names)
+
+
+def bulk_tags(c, post_ids, add=(), remove=()) -> tuple[int, int]:
+    """Add and/or remove tags on many posts at once ("Select posts" -> Edit tags). Removing goes first, so a tag in both
+    lists ends up on the posts. Removing only takes off the tag named (or the tag an alias points to), not what it implies.
+    Returns (posts that exist, tag links taken off)."""
+    ids = [r[0] for r in c.execute(f"SELECT id FROM posts WHERE id IN ({','.join('?' * len(post_ids))})", list(post_ids))] \
+        if post_ids else []
+    gone = 0
+    drop = {t for t in (lookup_tag(c, n) for n in remove) if t is not None}
+    for pid in ids:
+        for tid in drop:
+            gone += c.execute("DELETE FROM post_tags WHERE post_id=? AND tag_id=?", (pid, tid)).rowcount
+        if add:
+            add_tags(c, pid, add)
+    return len(ids), gone
 
 
 def add_implication(c, tag: str, implies: str) -> None:
@@ -630,6 +678,38 @@ def get_setting(c, key: str, default=None):
 
 def set_setting(c, key: str, value: str) -> None:
     c.execute("INSERT OR REPLACE INTO settings(key, value) VALUES (?, ?)", (key, value))
+
+
+def upload_key(c, new: bool = False) -> str:
+    """Secret that lets the iPhone Shortcut upload without logging in (only /upload accepts it)."""
+    key = get_setting(c, "upload_key")
+    if new or not key:
+        import secrets
+        key = secrets.token_urlsafe(24)
+        set_setting(c, "upload_key", key)
+    return key
+
+
+def heic_to_jpeg(path: Path) -> Path:
+    """iPhone photos (HEIC/HEIF) -> JPEG, since most browsers can't show HEIC. Other files are returned unchanged."""
+    path = Path(path)
+    if path.suffix.lower() not in (".heic", ".heif"):
+        return path
+    try:
+        import pillow_heif
+        from PIL import Image, ImageOps
+        pillow_heif.register_heif_opener()
+        with Image.open(path) as im:
+            exif = im.getexif()
+            im = ImageOps.exif_transpose(im).convert("RGB")   # turn the picture the way the phone held it
+        if exif:
+            exif[0x0112] = 1   # orientation is now applied
+        out = path.with_suffix(".jpg")
+        im.save(out, "JPEG", quality=92, exif=exif.tobytes() if exif else b"")
+        return out
+    except Exception as e:   # unreadable: let the normal checks reject it
+        print(f"HEIC conversion failed: {type(e).__name__}", flush=True)
+        return path
 
 
 def clean_site_name(name: str) -> str:

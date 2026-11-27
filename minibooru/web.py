@@ -142,7 +142,33 @@ def watch_rows(c) -> list[dict]:
     return out
 
 
+LOCKED_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="30"><title>Archive locked</title><style>body{font:16px/1.5 system-ui,sans-serif;background:#14171d;
+color:#e8eaed;max-width:34em;margin:12vh auto;padding:0 16px}code{background:#262b35;padding:2px 6px;border-radius:4px}</style></head>
+<body><h1>🔒 The archive's data is locked</h1><p>The data folder is missing or empty: the server was probably restarted
+and its encrypted drive isn't unlocked or mounted yet, so the archive can't be shown. Nothing was changed.</p>
+<p>Unlock and mount the drive on the server. This page checks again by itself every 30 seconds.</p></body></html>"""
+
+
+def locked_app(scheduler: bool = False) -> FastAPI:
+    """The data folder isn't the real archive (see core.data_ready): answer every request with a clear page and write
+    nothing. While serving, stop after a minute so Docker restarts the container: only a fresh start sees the folder
+    once it's unlocked (a running container keeps the empty folder it started with)."""
+    app = FastAPI(docs_url=None, redoc_url=None)
+    print(f"data folder {core.DATA} is not unlocked (no {core.DATA_MARKER}): showing the 'locked' page, "
+          "checking again in 60 s", flush=True)
+    if scheduler:
+        threading.Timer(60, lambda: os._exit(3)).start()
+
+    @app.api_route("/{path:path}", methods=["GET", "POST", "HEAD"])
+    def locked(path: str):
+        return HTMLResponse(LOCKED_PAGE, 503, headers={"Retry-After": "30"})
+    return app
+
+
 def create_app(scheduler: bool = False) -> FastAPI:
+    if not core.data_ready():
+        return locked_app(scheduler)
     core.DATA.mkdir(parents=True, exist_ok=True)
     (core.DATA / "files").mkdir(exist_ok=True)
     (core.DATA / "thumbs").mkdir(exist_ok=True)
@@ -180,6 +206,20 @@ def create_app(scheduler: bool = False) -> FastAPI:
         # the app icon is public so the login page and the browser tab can show it
         public = (request.url.path in ("/login", "/favicon.ico", "/manifest.webmanifest")   # phones read the manifest before login
                   or request.url.path.startswith(("/static/", "/brand/")))
+        key = request.headers.get("x-upload-key")
+        if key is not None and request.method == "POST" and request.url.path == "/upload":
+            # the iPhone Shortcut: a key instead of the login cookie, for this one route only
+            now = time.time()
+            _fails[:] = [t for t in _fails if now - t < 300]
+            if len(_fails) >= 5:
+                return PlainTextResponse("Too many wrong keys. Wait a few minutes.", status_code=429)
+            with core.connect() as c:
+                good = core.get_setting(c, "upload_key")
+            if not good or not secrets.compare_digest(key.encode(), good.encode()):
+                _fails.append(now)
+                return PlainTextResponse("Wrong upload key: copy it again from the Shortcut page.", status_code=401)
+            request.state.key_upload = True
+            return await call_next(request)
         if password and not public and not valid_session(request.cookies.get("mb_session")):
             if request.method == "GET":
                 dest = request.url.path + ("?" + request.url.query if request.url.query else "")
@@ -569,6 +609,18 @@ def create_app(scheduler: bool = False) -> FastAPI:
         disk_cache.update(out)
         return out
 
+    @app.get("/upload/shortcut")
+    def shortcut_page(request: Request):
+        with core.connect() as c:
+            key = core.upload_key(c)
+        return tpl.TemplateResponse(request, "shortcut.html", {"key": key})
+
+    @app.post("/upload/shortcut/new-key")
+    def shortcut_new_key():
+        with core.connect() as c:
+            core.upload_key(c, new=True)
+        return RedirectResponse("/upload/shortcut", 303)
+
     @app.get("/stats")
     def stats(request: Request):
         with core.connect() as c:
@@ -651,6 +703,14 @@ def create_app(scheduler: bool = False) -> FastAPI:
             raise HTTPException(400, "pick at least two posts to merge")
         return RedirectResponse(f"/post/{pid}", 303)
 
+    @app.post("/posts/bulk-tags")
+    def post_bulk_tags(ids: list[int] = Form([]), add: str = Form(""), remove: str = Form(""), next: str = Form("/")):
+        if not ids or not (add.split() or remove.split()):
+            raise HTTPException(400, "pick posts and type at least one tag to add or remove")
+        with core.connect() as c:
+            core.bulk_tags(c, ids, add.split(), remove.split())
+        return RedirectResponse(safe_next(next), 303)
+
     @app.post("/posts/bulk-delete")
     def post_bulk_delete(ids: list[int] = Form([]), next: str = Form("/")):
         with core.connect() as c:
@@ -676,6 +736,7 @@ def create_app(scheduler: bool = False) -> FastAPI:
                   f"{request.headers.get('user-agent', '?')[:80]})", flush=True)
         tags, title, together = (str(form.get(k, "")) for k in ("tags", "title", "together"))
         ajax = form.get("ajax") == "1"
+        keyed = getattr(request.state, "key_upload", False)   # from the iPhone Shortcut: answer in plain text
         parts = [v for k, v in form.multi_items() if k == "files" and hasattr(v, "read")]
         pid, added, dup, bad = None, 0, 0, []   # dup: files already in the archive (same contents)
         empty = ["(no name)" for k, v in form.multi_items() if k == "files" and not hasattr(v, "read")]  # nameless empty slot
@@ -691,6 +752,7 @@ def create_app(scheduler: bool = False) -> FastAPI:
                 if not dest.stat().st_size:
                     empty.append(f.filename or "(no name)")
                     continue
+                dest = core.heic_to_jpeg(dest)
                 sha = core.file_sha(dest)
                 known = c.execute("SELECT 1 FROM posts WHERE sha256=? UNION ALL SELECT 1 FROM post_media WHERE sha256=? LIMIT 1",
                                   (sha, sha)).fetchone()
@@ -702,11 +764,16 @@ def create_app(scheduler: bool = False) -> FastAPI:
                     added += 1
                     dup += bool(known)
                 except ValueError as e:
-                    if not ajax:
+                    if not (ajax or keyed):
                         raise HTTPException(400, str(e))
                     bad.append(f.filename or "(no name)")
         if ajax:
             return JSONResponse({"post": pid, "added": added, "dup": dup, "empty": empty, "bad": bad})
+        if keyed:   # the Shortcut shows this text as its notification
+            bits = ([f"{added - dup} new"] if added - dup else []) + ([f"{dup} already in the archive"] if dup else []) \
+                + ([f"{len(empty)} didn't arrive (still in iCloud?)"] if empty else []) \
+                + ([f"{len(bad)} not a picture or video"] if bad else [])
+            return PlainTextResponse(", ".join(bits) or "Nothing arrived", status_code=200 if added else 400)
         if not added:
             raise HTTPException(400, "No files arrived: the browser sent the form without them. On an iPhone this "
                                      "happens when photos are still in iCloud or the selection is too big. Try fewer at once.")
