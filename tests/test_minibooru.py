@@ -584,6 +584,28 @@ def test_upload_several_files_as_one_post(env, tmp_path, monkeypatch):
         assert c.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 3        # without the box: one post per file
 
 
+def test_upload_in_chunks_skips_empty_files(env, tmp_path, monkeypatch):
+    """The upload window sends chunks (ajax=1); "one post" chunks after the first add to that post; empty files
+    (what iPhone Safari sends for a photo it couldn't get) are skipped and reported, not a 422 for the whole batch."""
+    from fastapi.testclient import TestClient
+    from minibooru.web import create_app
+    monkeypatch.delenv("MINIBOORU_PASSWORD", raising=False)
+    cl = TestClient(create_app())
+    f = lambda c: ("files", (f"{c}.png", _pic(tmp_path / f"{c}.png", c).read_bytes(), "image/png"))
+    blank = ("files", ("", b"", "application/octet-stream"))
+    r = cl.post("/upload", data={"together": "1", "ajax": "1"}, files=[f("red"), ("files", ("gone.jpg", b"", "image/jpeg"))]).json()
+    assert r["added"] == 1 and r["empty"] == ["gone.jpg"] and r["post"]
+    r2 = cl.post("/upload", data={"together": "1", "ajax": "1", "into": str(r["post"])}, files=[f("blue"), blank]).json()
+    assert r2 == {"post": r["post"], "added": 1, "empty": ["(no name)"], "bad": []}
+    with core.connect() as c:
+        assert len(core.post_files(c, r["post"])) == 2 and c.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 1
+    bad = cl.post("/upload", data={"ajax": "1"}, files=[("files", ("x.txt", b"hi", "text/plain")), f("green")]).json()
+    assert bad["added"] == 1 and bad["bad"] == ["x.txt"]
+    r = cl.post("/upload", files=[blank], follow_redirects=False)              # plain form, nothing usable: clear message
+    assert r.status_code == 400 and "No files arrived" in r.text
+    assert cl.post("/upload", data={"tags": "x"}, follow_redirects=False).status_code == 400
+
+
 def test_background_editor_is_shared(env, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from minibooru.web import create_app

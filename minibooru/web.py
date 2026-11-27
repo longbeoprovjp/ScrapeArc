@@ -650,22 +650,45 @@ def create_app(scheduler: bool = False) -> FastAPI:
         return RedirectResponse(safe_next(next), 303)
 
     @app.post("/upload")
-    async def upload(files: list[UploadFile] = File(...), tags: str = Form(""), title: str = Form(""),
-                     together: str = Form("")):
-        """One post per file, or (together) one post holding all the files in the order picked."""
+    async def upload(request: Request):
+        """One post per file, or (together) one post holding all the files in the order picked.
+
+        The upload window sends big selections in small chunks (ajax=1, JSON answer); for "one post" the later chunks
+        name the post the first one made (into=<id>). Empty files (iPhone Safari sends those when it can't get a photo,
+        e.g. one still in iCloud) are skipped and reported instead of failing the whole batch."""
+        form = await request.form(max_files=1000)
+        tags, title, together = (str(form.get(k, "")) for k in ("tags", "title", "together"))
+        ajax = form.get("ajax") == "1"
+        parts = [v for k, v in form.multi_items() if k == "files" and hasattr(v, "read")]
+        pid, added, bad = None, 0, []
+        empty = ["(no name)" for k, v in form.multi_items() if k == "files" and not hasattr(v, "read")]  # nameless empty slot
         with core.connect() as c, tempfile.TemporaryDirectory() as tmp:
-            pid = None
-            for i, f in enumerate(files):
-                dest = Path(tmp) / str(i) / Path(f.filename or "upload").name
+            into = str(form.get("into", ""))
+            if together and into.isdigit() and c.execute("SELECT 1 FROM posts WHERE id=?", (int(into),)).fetchone():
+                pid = int(into)
+            for i, f in enumerate(parts):
+                dest = Path(tmp) / str(i) / (Path(f.filename or "").name or "upload")
                 dest.parent.mkdir()
-                dest.write_bytes(await f.read())
+                with open(dest, "wb") as out:
+                    shutil.copyfileobj(f.file, out, 1 << 20)
+                if not dest.stat().st_size:
+                    empty.append(f.filename or "(no name)")
+                    continue
                 try:
                     if together and pid is not None:
                         core.add_media(c, pid, dest)
                     else:
                         pid, _ = core.ingest(c, dest, tags.split() + [core.UPLOAD_TAG], title=title or dest.stem, source="upload")
+                    added += 1
                 except ValueError as e:
-                    raise HTTPException(400, str(e))
+                    if not ajax:
+                        raise HTTPException(400, str(e))
+                    bad.append(f.filename or "(no name)")
+        if ajax:
+            return JSONResponse({"post": pid, "added": added, "empty": empty, "bad": bad})
+        if not added:
+            raise HTTPException(400, "No files arrived: the browser sent the form without them. On an iPhone this "
+                                     "happens when photos are still in iCloud or the selection is too big. Try fewer at once.")
         return RedirectResponse(f"/post/{pid}" if together and pid else "/", 303)
 
     @app.get("/tags")

@@ -13,12 +13,59 @@
 <input name="tags" placeholder="tags, space separated" style="width:100%;margin:10px 0 8px">
 <input name="title" placeholder="title (optional)" style="width:100%">
 <label class="mut" style="display:block;margin:10px 0"><input type="checkbox" name="together" value="1"> put all the files in one post</label>
-<div class="row" style="justify-content:flex-end;margin:0"><button type="button" class="ghost" id="up-cancel">Cancel</button><button>Upload</button></div>
+<div id="upprog" hidden style="margin:10px 0"><progress id="upbar" max="1" value="0" style="width:100%"></progress><p class="mut" id="upmsg" style="margin:6px 0 0"></p></div>
+<div class="row" style="justify-content:flex-end;margin:0"><button type="button" class="ghost" id="up-cancel">Cancel</button><button id="up-go">Upload</button></div>
 </form></div></dialog>
 <script>
 (function(){const d=document.getElementById('updlg'),f=document.getElementById('upfiles'),drop=document.getElementById('drop'),n=document.getElementById('dropn');
-document.getElementById('up-open').onclick=()=>d.showModal();document.getElementById('up-cancel').onclick=()=>d.close();
-d.addEventListener('click',e=>{if(e.target===d)d.close()});
+const form=document.getElementById('upform'),prog=document.getElementById('upprog'),bar=document.getElementById('upbar'),
+msg=document.getElementById('upmsg'),go=document.getElementById('up-go'),cancel=document.getElementById('up-cancel');
+let busy=false,stop=false,xhr=null;
+document.getElementById('up-open').onclick=()=>d.showModal();
+cancel.onclick=()=>{if(busy){stop=true;if(xhr)xhr.abort()}else d.close()};
+d.addEventListener('click',e=>{if(e.target===d&&!busy)d.close()});
+d.addEventListener('cancel',e=>{if(busy)e.preventDefault()});
+/* Big selections go up in small chunks: one failure costs one chunk, not the whole upload. */
+const MAX_FILES=20,MAX_BYTES=80*1024*1024,plural=(k,w)=>k+' '+w+(k==1?'':'s');
+function chunks(list){const out=[];let cur=[],size=0;
+  for(const x of list){if(cur.length&&(cur.length>=MAX_FILES||size+x.size>MAX_BYTES)){out.push(cur);cur=[];size=0}cur.push(x);size+=x.size}
+  if(cur.length)out.push(cur);return out}
+function send(files,into,onBytes){return new Promise((ok,fail)=>{
+  const fd=new FormData();['tags','title','together'].forEach(k=>{const el=form.elements[k];if(el.type!='checkbox'||el.checked)fd.append(k,el.value)});
+  fd.append('ajax','1');if(into)fd.append('into',into);files.forEach(x=>fd.append('files',x,x.name));
+  xhr=new XMLHttpRequest();xhr.open('POST','/upload');xhr.upload.onprogress=e=>onBytes(e.loaded);
+  xhr.onload=()=>{if(xhr.status==200){try{ok(JSON.parse(xhr.responseText));return}catch(e){}}fail(new Error('server said '+xhr.status))};
+  xhr.onerror=()=>fail(new Error('connection lost'));xhr.onabort=()=>fail(new Error('stopped'));xhr.send(fd)})}
+form.addEventListener('submit',async e=>{
+  e.preventDefault();if(busy)return;
+  const all=[...f.files],empty=all.filter(x=>!x.size),files=all.filter(x=>x.size);
+  if(empty.length&&!confirm(plural(empty.length,'file')+' came through empty, so '+(empty.length==1?'it':'they')+' can\'t be uploaded (on an iPhone: usually photos still in iCloud). '+
+     (files.length?'Upload the other '+files.length+'?':'Nothing is left to upload.')))return;
+  if(!files.length)return;
+  busy=true;stop=false;go.disabled=true;cancel.textContent='Stop';prog.hidden=false;
+  form.querySelectorAll('input').forEach(i=>i.disabled=true);
+  const total=files.reduce((s,x)=>s+x.size,0),together=form.elements.together.checked;
+  let doneBytes=0,done=0,post=null,lost=[...empty.map(x=>x.name)],bad=[];
+  const show=extra=>{bar.value=total?Math.min(1,(doneBytes+extra)/total):1;
+    msg.textContent=done+' of '+plural(files.length,'file')+' uploaded ('+Math.round(100*bar.value)+'%)'};
+  async function tryUp(list){            // two tries, then one file at a time so only the bad files are lost
+    for(let attempt=0;attempt<2&&!stop;attempt++){
+      try{const r=await send(list,post,show);post=post||r.post;done+=list.length-r.empty.length-r.bad.length;
+        lost.push(...r.empty);bad.push(...r.bad);doneBytes+=list.reduce((s,x)=>s+x.size,0);show(0);return}
+      catch(err){if(stop)return}}
+    if(stop)return;
+    if(list.length>1){for(const x of list){if(stop)return;await tryUp([x])}return}
+    lost.push(list[0].name);doneBytes+=list[0].size;show(0)}
+  show(0);
+  for(const part of chunks(files)){if(stop)break;await tryUp(part)}
+  busy=false;xhr=null;
+  const dest=together&&post?'/post/'+post:'/';
+  if(!stop&&!lost.length&&!bad.length){location.href=dest;return}
+  let t=(stop?'Stopped. ':'')+plural(done,'file')+' uploaded.';
+  if(lost.length)t+=' '+plural(lost.length,'file')+' didn\'t arrive (empty or the connection failed): '+lost.slice(0,5).join(', ')+(lost.length>5?' and '+(lost.length-5)+' more':'')+'.';
+  if(bad.length)t+=' '+plural(bad.length,'file')+' aren\'t pictures or videos: '+bad.slice(0,5).join(', ')+(bad.length>5?' …':'')+'.';
+  msg.textContent=t;cancel.textContent='Done';cancel.onclick=()=>{location.href=dest};
+});
 f.addEventListener('change',()=>{const k=f.files.length;n.textContent=k?k+' file'+(k==1?'':'s')+' chosen':'or drop them here';drop.classList.toggle('has',k>0)});
 ['dragenter','dragover'].forEach(t=>drop.addEventListener(t,()=>drop.classList.add('over')));
 ['dragleave','drop'].forEach(t=>drop.addEventListener(t,()=>drop.classList.remove('over')));
