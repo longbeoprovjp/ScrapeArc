@@ -97,3 +97,12 @@ def test_sure_page_and_clear(data):
         assert [r[0] for r in c.execute("SELECT id FROM posts")] == [big]
         assert tags(c, big) == ["a", "b"]
     assert "Cleared 1 duplicate" in cl.get("/dups/sure?done=1").text
+
+
+def test_uploading_a_file_already_scraped_doesnt_mark_it_as_upload(data):
+    with core.connect() as c:
+        Image.new("RGB", (50, 40), "red").save(data / "same.png")
+        scraped, _ = core.ingest(c, data / "same.png", ["cat"], source="https://example.com/p/9")
+        pid, status = core.ingest(c, data / "same.png", ["phone", core.UPLOAD_TAG], source="upload")
+        assert (pid, status) == (scraped, "duplicate")
+        assert tags(c, scraped) == ["cat", "phone"]

@@ -506,6 +506,8 @@ def ingest(c, path, tags=(), title="", source="", data=None, posted=None):
     row = c.execute("SELECT id FROM posts WHERE sha256=? UNION ALL SELECT post_id FROM post_media WHERE sha256=? LIMIT 1",
                     (sha, sha)).fetchone()   # also inside multi-file posts (e.g. merged ones)
     if row:
+        if c.execute("SELECT source FROM posts WHERE id=?", (row[0],)).fetchone()[0] != "upload":
+            tags = [t for t in tags if (t if isinstance(t, str) else t[0]) != UPLOAD_TAG]   # a scraped post stays unmarked
         add_tags(c, row[0], tags)
         if posted:
             c.execute("UPDATE posts SET posted=? WHERE id=? AND posted IS NULL", (posted, row[0]))
