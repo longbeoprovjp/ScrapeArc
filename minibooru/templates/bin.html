@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% block title %}Bin · {{ brand.name }}{% endblock %}{% block body %}
+<style>
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin:14px 0}
+.bitem{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
+.bitem .bimg{position:relative;aspect-ratio:1;background:var(--line)}
+.bitem .bimg img{width:100%;height:100%;object-fit:cover;display:block}
+.bitem .bimg .badge{position:absolute;right:6px;top:6px}
+.bitem .bi{padding:8px 10px;display:flex;flex-direction:column;gap:4px;font-size:13px;flex:1}
+.bitem .bi b{overflow-wrap:anywhere}
+.bitem .bb{display:flex;gap:6px;margin-top:auto;padding-top:4px}
+.bitem .bb form{flex:1}.bitem .bb button{width:100%;padding:6px 8px;font-size:13px}
+.bhead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+</style>
+<div class="bhead"><h2>Bin</h2><span class="mut">{{ "{:,}".format(total) }} deleted post{{ '' if total == 1 else 's' }}</span>
+{% if total %}<form method="post" action="/bin/empty" style="margin-left:auto" onsubmit="return confirm('Delete all {{ total }} posts in the Bin for good? This can\'t be undone.')"><button class="danger">Empty the Bin</button></form>{% endif %}</div>
+<p class="note">Deleted posts stay here for {{ days }} days, then they and their files are removed for good. <b>Restore</b> puts a post back
+with its pictures, tags and favorite star; if it was a duplicate, the pair comes back for review.</p>
+{% if msg %}<p class="note">{{ msg }}</p>{% endif %}
+{% if not items %}<div class="empty"><b>The Bin is empty</b>Posts you delete land here first.</div>
+{% else %}
+<div class="bgrid">{% for it in items %}<div class="bitem">
+<div class="bimg"><img src="/bin/thumbs/{{ it.sha }}.jpg" alt="" loading="lazy" onerror="this.style.display='none'">{% if it.video %}<span class="badge">▶ video</span>{% elif it.nfiles > 1 %}<span class="badge">{{ it.nfiles }}</span>{% endif %}</div>
+<div class="bi"><b>#{{ it.post_id }} {{ it.title or 'Untitled' }}</b>
+<span class="mut">deleted {{ it.deleted[:16] }} UTC</span>
+{% if it.tags %}<span class="mut">{{ it.tags|join(', ') }}</span>{% endif %}
+<div class="bb"><form method="post" action="/bin/{{ it.id }}/restore"><button>Restore</button></form>
+<form method="post" action="/bin/{{ it.id }}/delete" onsubmit="return confirm('Delete #{{ it.post_id }} for good?')"><button class="ghost">Delete</button></form></div></div>
+</div>{% endfor %}</div>
+{% if pages > 1 %}<div class="row" style="justify-content:center;gap:14px">{% if page > 1 %}<a href="/bin?page={{ page - 1 }}">← Newer</a>{% endif %}<span class="mut">Page {{ page }} / {{ pages }}</span>{% if page < pages %}<a href="/bin?page={{ page + 1 }}">Older →</a>{% endif %}</div>{% endif %}
+{% endif %}
+{% endblock %}

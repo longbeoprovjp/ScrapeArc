@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Bin**: deleted posts (also from duplicate review and Clear all) can be restored for 30 days, with their pictures,
+  tags and scrape records; a daily clean-up removes older ones. The Stats page shows what the Bin holds.
+- **Low-space warning** on the gallery and the Stats page when less than 15 GB is free.
 - **Needs tags** filter: posts with no tag besides upload.
 - **Sure duplicates** also clears a single picture that is already one of the pictures of a post with several files
   (that post is kept whole).

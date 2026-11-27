@@ -9,14 +9,19 @@
 <a class="tile" href="/?view=bookmarked"><b>{{ "{:,}".format(n.bookmarked) }}</b><span>saved with the bookmark</span></a>
 <a class="tile" href="/dups/review"><b>{{ "{:,}".format(n.dups) }}</b><span>possible duplicates</span></a>
 <div class="tile"><b>{{ "{:,}".format(n.week) }}</b><span>added in the last 7 days</span></div>
+<a class="tile" href="/bin"><b>{{ "{:,}".format(bin_n) }}</b><span>in the Bin</span></a>
 </div>
 
 {% set used = disk.files + disk.thumbs + disk.db %}
+{% if low %}<p class="note warn">⚠ <b>Running low on space: {{ size(low) }} free</b> on the drive that holds the archive.
+New uploads and scrapes will fail when it's full. Empty the <a href="/bin">Bin</a>, clear <a href="/dups/sure">sure duplicates</a>,
+or make room on the drive.</p>{% endif %}
 <section class="spanel"><h3>Storage</h3>
 <div class="diskbar" title="This archive · other things on the drive · free">
 <i style="width:{{ (used / disk.disk * 100)|round(2) }}%;background:var(--btn)"></i>
 <i style="width:{{ ((disk.disk - disk.free - used) / disk.disk * 100)|round(2) }}%;background:color-mix(in srgb,var(--fg) 25%,transparent)"></i></div>
 <p><b>{{ size(used) }}</b> used by this archive <span class="mut">(pictures and videos {{ size(disk.files) }}, thumbnails {{ size(disk.thumbs) }}, database {{ size(disk.db) }})</span><br>
+{% if disk.trash %}<b>{{ size(disk.trash) }}</b> in the <a href="/bin">Bin</a> <span class="mut">({{ "{:,}".format(bin_n) }} deleted post{{ '' if bin_n == 1 else 's' }}, kept 30 days)</span><br>{% elif bin_n %}<a href="/bin">Bin</a>: {{ "{:,}".format(bin_n) }} deleted post{{ '' if bin_n == 1 else 's' }}<br>{% endif %}
 <b>{{ size(disk.free) }}</b> free of {{ size(disk.disk) }} on this drive{% if posts_left %} <span class="mut">· room for about {{ "{:,}".format(posts_left) }} more posts at the current average size</span>{% endif %}</p>
 </section>
 

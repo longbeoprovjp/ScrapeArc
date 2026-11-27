@@ -8,6 +8,7 @@ Concepts worth studying (same ideas Danbooru/Szurubooru use):
   * sha256 de-duplication            same file twice = one post, tags merged
 """
 import hashlib
+import json
 import mimetypes
 import os
 import re
@@ -61,6 +62,8 @@ CREATE TABLE IF NOT EXISTS post_media (   -- extra files of a multi-picture post
 CREATE TABLE IF NOT EXISTS deleted_media (   -- single files you removed from a post: never saved again by a scrape
   sha256 TEXT PRIMARY KEY, post_id INTEGER, at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);   -- per-install: name, ...
+CREATE TABLE IF NOT EXISTS trash (   -- the Bin: deleted posts, restorable for TRASH_DAYS (their files sit in trash/)
+  id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL, deleted TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_post_tags_tag ON post_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_dup_flags_b ON dup_flags(b);
 CREATE INDEX IF NOT EXISTS idx_scraped_post ON scraped(post_id);
@@ -548,18 +551,114 @@ def post_files(c, pid: int):
              "url": f"/files/{s[:2]}/{s}.{e}", "thumb": f"/thumbs/{s}.jpg"} for s, e, m, w, h in rows]
 
 
-def delete_post(c, pid: int, data=None) -> bool:
-    """Remove a post, its files and its scrape record (so it can be scraped again). Tags are kept."""
-    p = c.execute("SELECT sha256, ext FROM posts WHERE id=?", (pid,)).fetchone()
+TRASH_DAYS = 30   # deleted posts stay in the Bin this long, then their files are removed for good
+
+
+def delete_post(c, pid: int, data=None, trash: bool = True) -> bool:
+    """Remove a post and its scrape record (so it can be scraped again). With trash (the default) it goes to the Bin:
+    everything about it is saved and its files are moved to trash/, so restore_post can bring it back for TRASH_DAYS.
+    Tags themselves are kept either way."""
+    p = c.execute("SELECT * FROM posts WHERE id=?", (pid,)).fetchone()
     if not p:
         return False
-    files = [(p[0], p[1])] + [tuple(r) for r in c.execute("SELECT sha256, ext FROM post_media WHERE post_id=?", (pid,))]
+    media = [dict(r) for r in c.execute("SELECT * FROM post_media WHERE post_id=? ORDER BY pos", (pid,))]
+    files = [(p["sha256"], p["ext"])] + [(m["sha256"], m["ext"]) for m in media]
+    if trash:
+        snap = {"post": dict(p), "media": media,
+                "tags": [list(r) for r in c.execute("SELECT t.name, t.category FROM post_tags pt JOIN tags t ON t.id=pt.tag_id"
+                                                     " WHERE pt.post_id=?", (pid,))],
+                "scraped": [dict(r) for r in c.execute("SELECT * FROM scraped WHERE post_id=?", (pid,))],
+                "fingerprints": {r[0]: [r[1], r[2]] for r in c.execute(
+                    f"SELECT sha256, kind, hashes FROM fingerprints WHERE sha256 IN ({','.join('?' * len(files))})",
+                    [f[0] for f in files])}}
+        c.execute("INSERT INTO trash(post_id, data) VALUES (?, ?)", (pid, json.dumps(snap)))
     c.execute("DELETE FROM posts WHERE id=?", (pid,))          # cascades to post_media
     c.execute("DELETE FROM scraped WHERE post_id=?", (pid,))
     base = Path(data) if data else DATA
     for sha, ext in files:
-        _remove_file_if_unused(c, base, sha, ext)
+        _remove_file_if_unused(c, base, sha, ext, to_trash=trash)
     return True
+
+
+def _trash_paths(base: Path, sha: str, ext: str):
+    return base / "trash" / "files" / sha[:2] / f"{sha}.{ext}", base / "trash" / "thumbs" / f"{sha}.jpg"
+
+
+def restore_post(c, trash_id: int, data=None) -> int:
+    """Bring a post back from the Bin (same number when it's free), with its files, tags and scrape records, and check
+    it for duplicates again. Raises ValueError when it can't be done; nothing is changed then."""
+    row = c.execute("SELECT data FROM trash WHERE id=?", (trash_id,)).fetchone()
+    if not row:
+        raise ValueError("that post isn't in the Bin any more")
+    snap, base = json.loads(row[0]), Path(data) if data else DATA
+    p = snap["post"]
+    other = c.execute("SELECT id FROM posts WHERE sha256=? UNION ALL SELECT post_id FROM post_media WHERE sha256=? LIMIT 1",
+                      (p["sha256"], p["sha256"])).fetchone()
+    if other:
+        raise ValueError(f"its picture is already in the archive again, in post #{other[0]}")
+    files = [(p["sha256"], p["ext"])] + [(m["sha256"], m["ext"]) for m in snap["media"]]
+    for sha, ext in files:   # check everything before changing anything
+        if not (base / "files" / sha[:2] / f"{sha}.{ext}").exists() and not _trash_paths(base, sha, ext)[0].exists():
+            raise ValueError("its files are gone")
+    cols = [r[1] for r in c.execute("PRAGMA table_info(posts)")]
+    post = {k: v for k, v in p.items() if k in cols}
+    if c.execute("SELECT 1 FROM posts WHERE id=?", (post["id"],)).fetchone():
+        del post["id"]
+    pid = c.execute(f"INSERT INTO posts({','.join(post)}) VALUES ({','.join('?' * len(post))})", list(post.values())).lastrowid
+    for m in snap["media"]:
+        c.execute("INSERT OR IGNORE INTO post_media VALUES (?,?,?,?,?,?,?)",
+                  (pid, m["pos"], m["sha256"], m["ext"], m["mime"], m["width"], m["height"]))
+    for name, category in snap["tags"]:
+        tid = get_or_create_tag(c, name, category)
+        if tid:
+            c.execute("INSERT OR IGNORE INTO post_tags VALUES (?, ?)", (pid, tid))
+    for r in snap["scraped"]:
+        c.execute("INSERT OR IGNORE INTO scraped(post_url, post_id, status, at) VALUES (?,?,?,?)",
+                  (r["post_url"], pid, r["status"], r["at"]))
+    for sha, (kind, hashes) in snap["fingerprints"].items():
+        c.execute("INSERT OR IGNORE INTO fingerprints VALUES (?,?,?)", (sha, kind, hashes))
+    for sha, ext in files:
+        c.execute("DELETE FROM deleted_media WHERE sha256=?", (sha,))   # it's wanted again
+        dest, thumb = base / "files" / sha[:2] / f"{sha}.{ext}", base / "thumbs" / f"{sha}.jpg"
+        tf, tt = _trash_paths(base, sha, ext)
+        if not dest.exists():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            tf.replace(dest)
+        if tt.exists() and not thumb.exists():
+            tt.replace(thumb)
+    c.execute("DELETE FROM trash WHERE id=?", (trash_id,))
+    for f in post_files(c, pid):   # look-alike pairs it had come back for review
+        similar.check_file(c, pid, base, f["sha"], f["ext"], f["mime"])
+    return pid
+
+
+def purge_trash(c, data=None, ids=None, days: int | None = TRASH_DAYS) -> int:
+    """Delete Bin entries for good: the given ids, or (ids=None) those older than `days` (days=None: all of them).
+    A file is removed only when no post and no other Bin entry needs it. Returns entries removed."""
+    base = Path(data) if data else DATA
+    if ids is not None:
+        rows = [c.execute("SELECT id, data FROM trash WHERE id=?", (i,)).fetchone() for i in ids]
+        rows = [r for r in rows if r]
+    elif days is None:
+        rows = c.execute("SELECT id, data FROM trash").fetchall()
+    else:
+        rows = c.execute("SELECT id, data FROM trash WHERE deleted < datetime('now', ?)", (f"-{int(days)} days",)).fetchall()
+    if not rows:
+        return 0
+    c.executemany("DELETE FROM trash WHERE id=?", [(r[0],) for r in rows])
+    still = set()
+    for (d,) in c.execute("SELECT data FROM trash"):
+        snap = json.loads(d)
+        still.update([snap["post"]["sha256"]] + [m["sha256"] for m in snap["media"]])
+    for _, d in rows:
+        snap = json.loads(d)
+        for sha, ext in [(snap["post"]["sha256"], snap["post"]["ext"])] + [(m["sha256"], m["ext"]) for m in snap["media"]]:
+            if sha in still or c.execute("SELECT 1 FROM posts WHERE sha256=? UNION SELECT 1 FROM post_media WHERE sha256=?",
+                                         (sha, sha)).fetchone():
+                continue
+            for f in _trash_paths(base, sha, ext):
+                f.unlink(missing_ok=True)
+    return len(rows)
 
 
 def merge_posts(c, ids) -> int | None:
@@ -686,11 +785,18 @@ def sure_duplicates(c, data=None, detail=False) -> list:
     return out
 
 
-def _remove_file_if_unused(c, base: Path, sha: str, ext: str) -> bool:
+def _remove_file_if_unused(c, base: Path, sha: str, ext: str, to_trash: bool = False) -> bool:
     if c.execute("SELECT 1 FROM posts WHERE sha256=? UNION SELECT 1 FROM post_media WHERE sha256=?", (sha, sha)).fetchone():
         return False   # another post still uses this file
-    (base / "files" / sha[:2] / f"{sha}.{ext}").unlink(missing_ok=True)
-    (base / "thumbs" / f"{sha}.jpg").unlink(missing_ok=True)
+    f, t = base / "files" / sha[:2] / f"{sha}.{ext}", base / "thumbs" / f"{sha}.jpg"
+    if to_trash:   # into the Bin (same disk: a rename, no copying)
+        tf, tt = _trash_paths(base, sha, ext)
+        for src, dst in ((f, tf), (t, tt)):
+            if src.exists():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                src.replace(dst)
+    f.unlink(missing_ok=True)
+    t.unlink(missing_ok=True)
     c.execute("DELETE FROM fingerprints WHERE sha256=?", (sha,))
     return True
 

@@ -59,7 +59,7 @@ tf.addEventListener('submit',e=>{if(!add.value.trim()&&!rm.value.trim()){e.preve
   try{sessionStorage.setItem(KEY,location.href)}catch(err){}});
 f.addEventListener('submit',e=>{const n=boxes().filter(b=>b.checked).length,merge=(e.submitter&&e.submitter.id||via)==='sel-merge';
 if(merge?(n<2||!confirm('Merge '+n+' posts into one? All their files and tags go into the one that comes first on this page (it keeps its title); the other '+(n-1)+' post'+(n==2?'':'s')+' disappear. No files are deleted.'))
-:(!n||!confirm('Permanently delete '+n+' post'+(n==1?'':'s')+(n==1?' and its files?':' and their files?')))){e.preventDefault();return}
+:(!n||!confirm('Delete '+n+' post'+(n==1?'':'s')+'? '+(n==1?'It goes':'They go')+' to the Bin for 30 days, where you can restore '+(n==1?'it':'them')+'.'))){e.preventDefault();return}
 try{sessionStorage.setItem(KEY,location.href)}catch(err){}});
 })();
 </script>

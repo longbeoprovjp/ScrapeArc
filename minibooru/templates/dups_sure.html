@@ -10,7 +10,7 @@
 .spair .sz{font-size:12px;padding:3px 2px 0}
 </style>
 <div class="dhead"><h2>Sure duplicates</h2><a href="/dups/review" class="mut" style="margin-left:auto">One pair at a time →</a></div>
-{% if done >= 0 %}<p class="note">✓ Cleared {{ "{:,}".format(done) }} duplicate{{ '' if done == 1 else 's' }}. {{ "{:,}".format(open_total) }} possible duplicate pair{{ '' if open_total == 1 else 's' }} are left for review by hand.</p>{% endif %}
+{% if done >= 0 %}<p class="note">✓ Cleared {{ "{:,}".format(done) }} duplicate{{ '' if done == 1 else 's' }}. {{ "{:,}".format(open_total) }} possible duplicate pair{{ '' if open_total == 1 else 's' }} are left for review by hand. The copies are in the <a href="/bin">Bin</a> for 30 days.</p>{% endif %}
 {% if not count %}
 <div class="empty"><b>No sure duplicates</b>{% if open_total %}The {{ "{:,}".format(open_total) }} pairs still open need a look by hand: <a href="/dups/review">review them</a>.{% else %}Nothing is flagged right now.{% endif %}</div>
 {% else %}
@@ -19,8 +19,8 @@ content, or a single picture that is already one of the pictures of a post with 
 (then the bigger file, then the older post); a post with several files is kept whole. The copy's tags, favorite star and scrape record move to the one kept, except
 the <b>upload</b> tag, which stays only on posts you uploaded yourself. A later scrape won't save the copy again.</p>
 <p class="mut">Videos, two posts that both have several files, and less certain pairs are left for <a href="/dups/review">review by hand</a>.
-Below are the first {{ sample|length }}: green is kept, the other is deleted.</p>
-<form method="post" action="/dups/sure" onsubmit="return confirm('Delete {{ count }} copies, keeping the better picture of each pair? This can\'t be undone.')">
+Below are the first {{ sample|length }}: green is kept, the other goes to the <a href="/bin">Bin</a> for 30 days.</p>
+<form method="post" action="/dups/sure" onsubmit="return confirm('Delete {{ count }} copies, keeping the better picture of each pair? They go to the Bin for 30 days.')">
 <input type="hidden" name="expect" value="{{ count }}">
 <button>Clear all {{ "{:,}".format(count) }} sure duplicates</button></form>
 <div class="sgrid">{% for s in sample %}<div class="spair">

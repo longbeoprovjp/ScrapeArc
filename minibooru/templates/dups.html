@@ -5,7 +5,7 @@
 {% if not sides %}
 <div class="empty"><b>No possible duplicates left</b>Every flagged pair has been sorted out. New ones are flagged as posts come in.</div>
 {% else %}
-<p class="mut dkeys">Pick the one to keep: the other is deleted and its tags move over. Keys: <kbd>←</kbd> keep left · <kbd>→</kbd> keep right · <kbd>B</kbd> keep both · <kbd>S</kbd> skip</p>
+<p class="mut dkeys">Pick the one to keep: the other goes to the <a href="/bin">Bin</a> (30 days) and its tags move over. Keys: <kbd>←</kbd> keep left · <kbd>→</kbd> keep right · <kbd>B</kbd> keep both · <kbd>S</kbd> skip</p>
 <div class="dpair">{% for s in sides %}{% set p = s.p %}
 <div class="dside{{ ' hint' if hint == loop.index0 }}">
 <a href="/post/{{ p.id }}" target="_blank" rel="noopener" class="dmain" title="Open the post in a new tab">

@@ -166,6 +166,18 @@ def locked_app(scheduler: bool = False) -> FastAPI:
     return app
 
 
+LOW_SPACE = 15 * 1024 ** 3   # warn on the gallery and Stats below this much free space where the data lives
+
+
+def low_space():
+    """Free bytes on the data folder's drive when it's running low, else None."""
+    try:
+        free = shutil.disk_usage(core.DATA).free
+    except OSError:
+        return None
+    return free if free < LOW_SPACE else None
+
+
 def create_app(scheduler: bool = False) -> FastAPI:
     if not core.data_ready():
         return locked_app(scheduler)
@@ -188,6 +200,18 @@ def create_app(scheduler: bool = False) -> FastAPI:
     if scheduler:
         watcher.start()
         threading.Thread(target=similar.backfill, args=(core.connect, core.DATA, print), daemon=True).start()
+
+        def empty_old_bin():   # at start, then daily: Bin entries older than core.TRASH_DAYS go for good
+            while True:
+                try:
+                    with core.connect() as c:
+                        n = core.purge_trash(c)
+                    if n:
+                        print(f"bin: removed {n} post(s) deleted over {core.TRASH_DAYS} days ago", flush=True)
+                except Exception as e:
+                    print(f"bin clean-up failed: {type(e).__name__}", flush=True)
+                time.sleep(86400)
+        threading.Thread(target=empty_old_bin, daemon=True).start()
 
     @app.middleware("http")
     async def first_run_setup(request: Request, call_next):
@@ -242,7 +266,7 @@ def create_app(scheduler: bool = False) -> FastAPI:
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")   # a file is only ever what its type says
         resp.headers.setdefault("X-Frame-Options", "DENY")             # no other site can show the app in a frame
         resp.headers.setdefault("Referrer-Policy", "same-origin")       # links out don't reveal the app's address
-        if request.url.path.startswith(("/files/", "/thumbs/", "/background/", "/brand/")):
+        if request.url.path.startswith(("/files/", "/thumbs/", "/background/", "/brand/", "/bin/thumbs/")):
             resp.headers["Content-Security-Policy"] = "sandbox"          # stored media can never run script
         return resp
     tpl = Jinja2Templates(directory=Path(__file__).parent / "templates")
@@ -251,6 +275,7 @@ def create_app(scheduler: bool = False) -> FastAPI:
     tpl.env.globals["bg_versions"] = core.background_versions
     tpl.env.globals["brand"] = brand
     tpl.env.globals["theme_cfg"] = themes.config()
+    tpl.env.globals["low_space"] = low_space
 
     @app.exception_handler(HTTPException)
     async def friendly_errors(request: Request, exc: HTTPException):
@@ -585,7 +610,7 @@ def create_app(scheduler: bool = False) -> FastAPI:
         if disk_cache.get("at", 0) > time.time() - 600:
             return disk_cache
         out = {}
-        for part in ("files", "thumbs"):
+        for part in ("files", "thumbs", "trash"):
             total, stack = 0, [core.DATA / part]
             while stack:
                 try:
@@ -605,6 +630,56 @@ def create_app(scheduler: bool = False) -> FastAPI:
         disk_cache.clear()
         disk_cache.update(out)
         return out
+
+    @app.get("/bin")
+    def bin_page(request: Request, page: int = 1, msg: str = ""):
+        """Deleted posts, newest first, restorable for core.TRASH_DAYS."""
+        page = max(1, page)
+        with core.connect() as c:
+            total = c.execute("SELECT COUNT(*) FROM trash").fetchone()[0]
+            rows = c.execute("SELECT id, post_id, deleted, data FROM trash ORDER BY id DESC LIMIT ? OFFSET ?",
+                             (core.PER_PAGE, (page - 1) * core.PER_PAGE)).fetchall()
+        items = []
+        for r in rows:
+            snap = json.loads(r["data"])
+            p = snap["post"]
+            items.append({"id": r["id"], "post_id": r["post_id"], "deleted": r["deleted"], "title": p.get("title") or "",
+                          "sha": p["sha256"], "video": p["mime"].startswith("video/"), "nfiles": 1 + len(snap["media"]),
+                          "tags": [t[0] for t in snap["tags"]][:6]})
+        pages = max(1, -(-total // core.PER_PAGE))
+        return tpl.TemplateResponse(request, "bin.html", {"items": items, "total": total, "page": page, "pages": pages,
+                                                          "days": core.TRASH_DAYS, "msg": msg})
+
+    @app.get("/bin/thumbs/{name}")
+    def bin_thumb(name: str):
+        if not re.fullmatch(r"[0-9a-f]{64}\.jpg", name):
+            raise HTTPException(404)
+        f = core.DATA / "trash" / "thumbs" / name
+        if not f.exists():
+            raise HTTPException(404)
+        return FileResponse(f, media_type="image/jpeg")
+
+    @app.post("/bin/{tid}/restore")
+    def bin_restore(tid: int):
+        try:
+            with core.connect() as c:
+                pid = core.restore_post(c, tid)
+        except ValueError as e:
+            return RedirectResponse("/bin?" + urlencode({"msg": f"Couldn't restore it: {e}."}), 303)
+        return RedirectResponse(f"/post/{pid}", 303)
+
+    @app.post("/bin/{tid}/delete")
+    def bin_delete(tid: int):
+        with core.connect() as c:
+            core.purge_trash(c, ids=[tid])
+        return RedirectResponse("/bin?" + urlencode({"msg": "Deleted for good."}), 303)
+
+    @app.post("/bin/empty")
+    def bin_empty():
+        with core.connect() as c:
+            n = core.purge_trash(c, days=None)
+        disk_cache.clear()
+        return RedirectResponse("/bin?" + urlencode({"msg": f"Emptied the Bin: {n:,} post{'' if n == 1 else 's'} deleted for good."}), 303)
 
     @app.get("/upload/shortcut")
     def shortcut_page(request: Request):
@@ -643,11 +718,14 @@ def create_app(scheduler: bool = False) -> FastAPI:
                                GROUP BY pt.tag_id ORDER BY n DESC LIMIT 24""", (core.UPLOAD_TAG,)).fetchall()
             last = c.execute("SELECT * FROM scrape_runs ORDER BY id DESC LIMIT 1").fetchone()
         disk = data_size()
+        with core.connect() as c:
+            bin_n = c.execute("SELECT COUNT(*) FROM trash").fetchone()[0]
         per_post = (disk["files"] / nums["posts"]) if nums["posts"] else 0
         return tpl.TemplateResponse(request, "stats.html", {
             "n": nums, "months": months, "mmax": max([r["n"] for r in months] or [1]), "days": days,
             "dmax": max([r["n"] for r in days] or [1]), "top": top, "last": last, "disk": disk,
-            "posts_left": int(disk["free"] / per_post) if per_post else None, "size": human_size})
+            "posts_left": int(disk["free"] / per_post) if per_post else None, "size": human_size,
+            "bin_n": bin_n, "low": low_space()})
 
     @app.get("/tags/suggest")
     def tags_suggest(q: str = ""):
