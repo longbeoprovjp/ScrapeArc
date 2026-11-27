@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Tag one by one**: untagged posts one at a time; Enter saves and shows the next, with tag suggestions, same tags
+  as last time (↑) and recently used tags.
+- **Failing auto rescans are reported**: after 3 failed runs in a row over a day (site down, or nothing found on the
+  page because its layout changed), the gallery and the Scrape page say so.
 - **Bin**: deleted posts (also from duplicate review and Clear all) can be restored for 30 days, with their pictures,
   tags and scrape records; a daily clean-up removes older ones. The Stats page shows what the Bin holds.
 - **Low-space warning** on the gallery and the Stats page when less than 15 GB is free.

@@ -45,23 +45,30 @@ def run_watch(wid: int, log=lambda m: None, cancel_event=None) -> None:
         w = c.execute("SELECT * FROM watches WHERE id=?", (wid,)).fetchone()
         if not w:
             return
+        ok = True   # False: an error, the site unreachable, or nothing at all found on the page (layout changed?)
         try:
             st = scraper.scrape(c, w["url"], _opts(w, cancel_event), log=log)
+            ok = bool(st["cancelled"] or (st["seen"] > 0 and not (st["error"] and not st["new"] and not st["already"])))
             result = (f"{st['new']} new, {st['already']} already had, {st['matched']} matched of {st['seen']} scanned"
                       + (", stopped at a post already saved" if st["stopped"] == 1 else "")
                       + (", reached the date limit" if st["stopped"] == 2 else "")
                       + (", stopped by you" if st["cancelled"] else "")
                       + (f", {st['error']} errors" if st["error"] else ""))
         except (httpx.TransportError, OSError):
-            result = "site unreachable (offline?), will retry next interval"
+            result, ok = "site unreachable (offline?), will retry next interval", False
             log(result)
         except Exception as e:  # never let one watch kill the scheduler
-            result = f"failed: {e}"
+            result, ok = f"failed: {e}", False
             log(result)
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
         row = c.execute("SELECT interval_min FROM watches WHERE id=?", (wid,)).fetchone()   # may have been edited meanwhile
         c.execute("UPDATE watches SET last_run=?, last_result=?, next_run=? WHERE id=?",
                   (now, result, time.time() + (row[0] if row else w["interval_min"]) * 60, wid))
+        if ok:
+            c.execute("UPDATE watches SET fails=0, fail_since='' WHERE id=?", (wid,))
+        else:   # counted so the gallery can say when a rescan has been broken for a while (core.failing_watches)
+            c.execute("UPDATE watches SET fails=fails+1, fail_since=CASE WHEN fail_since='' THEN ? ELSE fail_since END"
+                      " WHERE id=?", (now, wid))
 
 
 def run_due() -> int:

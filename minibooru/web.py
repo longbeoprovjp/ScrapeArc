@@ -136,6 +136,7 @@ def watch_rows(c) -> list[dict]:
         d["state"] = ("running" if watcher.running_wid == w["id"] else "paused" if not w["enabled"]
                       else "queued" if w["next_run"] <= now else "waiting")
         d["in_min"] = max(1, -(-int(w["next_run"] - now) // 60))
+        d["failing"] = w["fails"] >= core.FAIL_RUNS
         d["stop_text"] = (f"back to {scraper.describe_date(date.fromisoformat(w['until']))}" if w["until"]
                           else f"up to {w['max_posts']} new posts")
         out.append(d)
@@ -276,6 +277,11 @@ def create_app(scheduler: bool = False) -> FastAPI:
     tpl.env.globals["brand"] = brand
     tpl.env.globals["theme_cfg"] = themes.config()
     tpl.env.globals["low_space"] = low_space
+
+    def failing():
+        with core.connect() as c:
+            return core.failing_watches(c)
+    tpl.env.globals["failing_watches"] = failing
 
     @app.exception_handler(HTTPException)
     async def friendly_errors(request: Request, exc: HTTPException):
@@ -630,6 +636,33 @@ def create_app(scheduler: bool = False) -> FastAPI:
         disk_cache.clear()
         disk_cache.update(out)
         return out
+
+    @app.get("/tagging")
+    def tagging(request: Request, skip: int = 0, order: str = "new"):
+        """Tag one by one: the posts of the "Needs tags" filter, one at a time, Enter saves and shows the next."""
+        order = "old" if order == "old" else "new"
+        with core.connect() as c:
+            left = c.execute(f"SELECT COUNT(*) FROM posts p WHERE {core.UNTAGGED_SQL}").fetchone()[0]
+            skip = max(0, min(skip, max(0, left - 1)))
+            p = c.execute(f"""SELECT * FROM posts p WHERE {core.UNTAGGED_SQL}
+                ORDER BY COALESCE(p.posted, p.created) {'ASC' if order == 'old' else 'DESC'}, p.id {'ASC' if order == 'old' else 'DESC'}
+                LIMIT 1 OFFSET ?""", (skip,)).fetchone()
+            files = core.post_files(c, p["id"]) if p else []
+            ptags = core.post_tags(c, p["id"]) if p else []
+        return tpl.TemplateResponse(request, "tagging.html", {"p": p, "files": files, "ptags": ptags, "left": left,
+                                                              "skip": skip, "order": order})
+
+    @app.post("/tagging/{pid}")
+    def tagging_save(pid: int, add: str = Form("")):
+        names = add.split()
+        if not names:
+            raise HTTPException(400, "type at least one tag")
+        with core.connect() as c:
+            found, _ = core.bulk_tags(c, [pid], names)
+            if not found:
+                raise HTTPException(404, "that post is gone")
+            tags = [r["name"] for r in core.post_tags(c, pid)]
+        return JSONResponse({"ok": True, "tags": tags})
 
     @app.get("/bin")
     def bin_page(request: Request, page: int = 1, msg: str = ""):

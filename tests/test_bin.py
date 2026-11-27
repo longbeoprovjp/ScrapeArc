@@ -101,3 +101,48 @@ def test_bin_pages_and_low_space(data, monkeypatch):
     assert "Running low on space" in cl.get("/stats").text and "free on the archive" in cl.get("/").text
     cl.post(f"/post/{pid}/delete", data={"next": "/"})
     assert "Emptied the Bin: 1 post" in cl.post("/bin/empty").text
+
+
+def test_failing_rescans_are_reported(data, monkeypatch):
+    import time
+    from minibooru import scraper, watcher, web
+    with core.connect() as c:
+        wid = c.execute("INSERT INTO watches(url, keywords, next_run) VALUES ('https://example.com/list', 'x', 0)").lastrowid
+    calls = {"seen": 0}
+    monkeypatch.setattr(scraper, "scrape", lambda c, url, opt, log=None: {"seen": calls["seen"], "matched": 0, "new": 0,
+                        "duplicate": 0, "already": 0, "filtered": 0, "error": 0, "stopped": 0, "cancelled": 0})
+    for _ in range(3):
+        watcher.run_watch(wid)                                   # finds nothing: layout changed?
+    with core.connect() as c:
+        assert c.execute("SELECT fails FROM watches").fetchone()[0] == 3
+        assert core.failing_watches(c) == []                     # not a day yet
+        c.execute("UPDATE watches SET fail_since=strftime('%Y-%m-%d %H:%M', 'now', '-2 days')")
+        assert [w["id"] for w in core.failing_watches(c)] == [wid]
+    cl = TestClient(web.create_app())
+    assert "auto rescan has been failing since" in cl.get("/").text
+    assert "Failing since" in cl.get("/scrape").text
+    calls["seen"] = 12                                           # works again
+    watcher.run_watch(wid)
+    with core.connect() as c:
+        assert tuple(c.execute("SELECT fails, fail_since FROM watches").fetchone()) == (0, "")
+    assert "auto rescan has been failing" not in cl.get("/").text
+
+
+def test_tag_one_by_one(data):
+    from minibooru import web
+    with core.connect() as c:
+        first = make(c, data, "a", "red", [core.UPLOAD_TAG], source="upload")
+        second = make(c, data, "b", "blue", [core.UPLOAD_TAG], source="upload")
+        make(c, data, "c", "green", ["done"], source="upload")              # already tagged: not offered
+    cl = TestClient(web.create_app())
+    r = cl.get("/tagging")
+    assert r.status_code == 200 and "2</b> left to tag" in r.text and f"#{second} " in r.text    # newest first
+    assert f"#{first} " in cl.get("/tagging?order=old").text
+    assert cl.post(f"/tagging/{second}", data={"add": ""}).status_code == 400
+    r = cl.post(f"/tagging/{second}", data={"add": "Robin bird"})
+    assert sorted(r.json()["tags"]) == ["bird", "robin", core.UPLOAD_TAG]
+    r = cl.get("/tagging")
+    assert "1</b> left to tag" in r.text and f"#{first} " in r.text      # the tagged one left the list
+    assert cl.post("/tagging/99999", data={"add": "x"}).status_code == 404
+    cl.post(f"/tagging/{first}", data={"add": "sparrow"})
+    assert "Nothing left to tag" in cl.get("/tagging").text

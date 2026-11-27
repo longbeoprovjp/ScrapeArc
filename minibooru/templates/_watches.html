@@ -2,7 +2,7 @@
 {% if current %}<div class="busybar" {% if current_url %}data-href="{{ current_url }}" title="Click to open the live progress page"{% endif %}>
 <span>⏳ Running now: <a href="{{ current_url or '#' }}"><b style="word-break:break-all">{{ current }}</b></a>{% if current_for %} <span class="mut">· running for {{ current_for }}</span>{% endif %}<br><span class="mut">Click here to watch its progress. A new scrape can start once it finishes.</span></span>
 {% if current_stop %}<form method="post" action="{{ current_stop }}" style="margin:0"><input type="hidden" name="next" value="/scrape"><button class="danger">Stop</button></form>{% endif %}</div>{% endif %}
-<h3>Auto-rescan (watches)</h3>
+<h3 id="watches">Auto-rescan (watches)</h3>
 <p class="note">{% if scheduler %}The scheduler is running: each watch rescans its page on its own countdown while this server is up, one scrape at a time. A rescan stops as soon as it reaches a post that is already saved (or its date limit) and waits for the next countdown.{% else %}The scheduler is off in this process.{% endif %} Times are shown in your local time.</p>
 {% if watches %}<table class="wtable"><tr><th>Page</th><th>Stops</th><th>Status</th><th>Last run</th><th></th></tr>
 {% for w in watches %}<tr>
@@ -12,7 +12,7 @@
 {% elif w.state == 'paused' %}<span class="st">Paused</span>
 {% elif w.state == 'queued' %}<span class="st">Queued, starts shortly</span>
 {% else %}<span class="st">Next run in {{ w.in_min }} min</span>{% endif %}</td>
-<td>{% if w.last_run %}<time class="utc" data-utc="{{ w.last_run }}">{{ w.last_run }} UTC</time>{% else %}<span class="mut">never</span>{% endif %}<div class="mut">{{ w.last_result or '' }}</div></td>
+<td>{% if w.last_run %}<time class="utc" data-utc="{{ w.last_run }}">{{ w.last_run }} UTC</time>{% else %}<span class="mut">never</span>{% endif %}<div class="mut">{{ w.last_result or '' }}</div>{% if w.failing %}<div class="st" style="color:var(--danger);font-weight:600">⚠ Failing since <time class="utc" data-utc="{{ w.fail_since }}">{{ w.fail_since }} UTC</time> ({{ w.fails }} runs in a row): the site may be down or have changed its layout. Try <b>Run now</b> and read its log.</div>{% endif %}</td>
 <td><div class="row" style="margin:0">
 {% if w.state == 'running' %}<form method="post" action="/watches/{{ w.id }}/stop"><button class="danger">Stop</button></form>{% endif %}
 <form method="post" action="/watches/{{ w.id }}/toggle"><button class="ghost">{{ 'Pause' if w.enabled else 'Resume' }}</button></form>

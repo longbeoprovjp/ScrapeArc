@@ -221,6 +221,17 @@ def _migrate_upload_tag(c):
     c.execute("PRAGMA user_version = 3")
 
 
+FAIL_RUNS, FAIL_HOURS = 3, 24   # an auto rescan counts as broken after this many failed runs in a row over this long
+
+
+def failing_watches(c) -> list:
+    """Enabled auto rescans that have failed FAIL_RUNS times in a row for at least FAIL_HOURS (site down, or its
+    layout changed so nothing is found any more): [{id, fail_since, last_result}]."""
+    return [dict(r) for r in c.execute(
+        """SELECT id, fail_since, last_result FROM watches WHERE enabled=1 AND fails >= ? AND fail_since <> ''
+           AND fail_since <= strftime('%Y-%m-%d %H:%M', 'now', ?) ORDER BY fail_since""", (FAIL_RUNS, f"-{FAIL_HOURS} hours"))]
+
+
 DATA_MARKER = ".scrapearc-data"   # says "this folder is the real archive" (it's missing when the encrypted store is locked)
 
 
@@ -266,6 +277,8 @@ def connect(data=None):
     for table, col, ddl in (("watches", "roles", "TEXT NOT NULL DEFAULT ''"),     # migrate older databases
                             ("watches", "date", "TEXT NOT NULL DEFAULT ''"),
                             ("watches", "until", "TEXT NOT NULL DEFAULT ''"),     # stop at this date (YYYY-MM-DD), '' = use post count
+                            ("watches", "fails", "INTEGER NOT NULL DEFAULT 0"),    # failing auto rescans in a row
+                            ("watches", "fail_since", "TEXT NOT NULL DEFAULT ''"), # UTC time of the first of those
                             ("scrape_runs", "kind", "TEXT NOT NULL DEFAULT 'manual'"),
                             ("posts", "posted", "TEXT"),                           # upload time on the source site (UTC)
                             ("posts", "favorite", "INTEGER NOT NULL DEFAULT 0"),

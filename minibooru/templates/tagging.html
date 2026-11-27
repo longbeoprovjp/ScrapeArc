@@ -1,0 +1,90 @@
+{% extends "base.html" %}{% block title %}Tag one by one · {{ brand.name }}{% endblock %}{% block body %}
+<style>
+.tg{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:16px;align-items:start;margin-top:10px}
+.tgmedia{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.tgmain{background:color-mix(in srgb,var(--fg) 6%,transparent);border-radius:calc(var(--radius) - 4px);overflow:hidden}
+.tgmain img,.tgmain video{display:block;width:100%;height:min(68vh,760px);object-fit:contain}
+.tgthumbs{display:flex;gap:5px;flex-wrap:wrap}
+.tgth{position:relative;padding:0;border:2px solid transparent;border-radius:8px;background:none;cursor:pointer;line-height:0}
+.tgth img{width:56px;height:56px;object-fit:cover;border-radius:6px}.tgth.on{border-color:var(--acc)}
+.tgth span{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:16px;line-height:1;text-shadow:0 1px 3px #000}
+.tgside{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:10px;position:sticky;top:76px}
+.tgside h3{margin:0;overflow-wrap:anywhere}
+.tgbox{position:relative}.tgbox input{width:100%}
+.tgrow{display:flex;gap:8px;flex-wrap:wrap}.tgrow button{flex:1}
+.tgrecent{display:flex;gap:6px;flex-wrap:wrap}.tgrecent button{padding:3px 10px;font-size:13px}
+.tgmsg{min-height:1.4em;font-size:13px}
+.tghead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+kbd{font:600 12px ui-monospace,monospace;padding:1px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;background:var(--card);color:var(--fg)}
+@media(max-width:800px){.tg{grid-template-columns:1fr}.tgside{position:static}.tgmain img,.tgmain video{height:48vh}.tgkeys{display:none}}
+</style>
+<div class="tghead"><h2>Tag one by one</h2><span class="mut"><b id="tgleft">{{ "{:,}".format(left) }}</b> left to tag</span>
+<span style="margin-left:auto" class="mut">{% if order == 'old' %}<a href="/tagging?order=new">Newest first</a> · <b>Oldest first</b>{% else %}<b>Newest first</b> · <a href="/tagging?order=old">Oldest first</a>{% endif %} · <a href="/?view=untagged">See them as a list</a></span></div>
+{% if not p %}
+<div class="empty"><b>Nothing left to tag</b>Every post has a tag besides <i>upload</i>. New uploads show up here.</div>
+{% else %}
+<p class="mut tgkeys">Type tags (space between them) and press <kbd>Enter</kbd> to save and go to the next post. With the box empty: <kbd>→</kbd> skip · <kbd>←</kbd> back · <kbd>↑</kbd> same tags as last time.</p>
+<div class="tg">
+<div class="tgmedia">
+{% set f = files[0] %}<a class="tgmain" href="/post/{{ p.id }}" target="_blank" rel="noopener" title="Open the post in a new tab">
+{% if f.is_image %}<img id="tgimg" src="{{ f.url }}" alt="">{% else %}<video id="tgvid" src="{{ f.url }}" controls muted loop autoplay playsinline></video>{% endif %}</a>
+{% if files|length > 1 %}<div class="mut" style="font-size:13px">Picture <span id="tgno">1</span> of {{ files|length }}</div>
+<div class="tgthumbs">{% for g in files %}<button type="button" class="tgth{{ ' on' if loop.first }}" data-i="{{ loop.index }}" data-src="{{ g.url }}" data-img="{{ 1 if g.is_image else 0 }}" title="Show picture {{ loop.index }}"><img src="{{ g.thumb }}" alt="" loading="lazy">{% if not g.is_image %}<span>▶</span>{% endif %}</button>{% endfor %}</div>{% endif %}
+</div>
+<div class="tgside">
+<h3>#{{ p.id }} {{ p.title or 'Untitled' }}</h3>
+<div class="mut" style="font-size:13px">{{ (p.posted or p.created)[:10] }} · {{ files|length }} file{{ '' if files|length == 1 else 's' }}{% if p.width %} · {{ p.width }}×{{ p.height }}{% endif %}</div>
+<div class="chips" id="tgtags">{% for t in ptags %}<span class="chip" style="--c:{{ t.color }}">{{ t.name }}</span>{% endfor %}</div>
+<form id="tgform" autocomplete="off">
+<div class="tgbox"><input id="tgin" name="add" placeholder="tags, e.g. robin bird" autocapitalize="off" spellcheck="false" autofocus><ul class="tagsug" id="tgsug" role="listbox" hidden></ul></div>
+</form>
+<div class="tgrow"><button type="button" id="tgsave">Save &amp; next <kbd>Enter</kbd></button></div>
+<div class="tgrow"><button type="button" class="ghost" id="tgback"{% if skip == 0 %} disabled{% endif %}>← Back</button><button type="button" class="ghost" id="tgskip">Skip →</button></div>
+<div id="tglastrow" hidden><button type="button" class="ghost" id="tglast" style="width:100%">Same as last: <b id="tglasttxt"></b> <kbd>↑</kbd></button></div>
+<div id="tgrecentrow" hidden><div class="mut" style="font-size:12px;margin-bottom:4px">Recently used (click to add)</div><div class="tgrecent" id="tgrecent"></div></div>
+<div class="tgmsg mut" id="tgmsg"></div>
+</div>
+</div>
+<script>
+(function(){const PID={{ p.id }},SKIP={{ skip }},ORDER='{{ order }}',inp=document.getElementById('tgin'),msg=document.getElementById('tgmsg');
+const go=s=>location.replace('/tagging?skip='+Math.max(0,s)+(ORDER==='old'?'&order=old':''));
+mbTagSuggest(inp,document.getElementById('tgsug'));
+let last='',recent=[];try{last=localStorage.getItem('mb-tag-last')||'';recent=JSON.parse(localStorage.getItem('mb-tag-recent')||'[]')}catch(e){}
+if(last){document.getElementById('tglastrow').hidden=false;document.getElementById('tglasttxt').textContent=last}
+const rbox=document.getElementById('tgrecent');
+recent.slice(0,12).forEach(t=>{const b=document.createElement('button');b.type='button';b.className='ghost';b.textContent=t;
+  b.onclick=()=>{const w=inp.value.split(/\s+/).filter(Boolean);if(!w.includes(t))w.push(t);inp.value=w.join(' ')+' ';inp.focus()};rbox.appendChild(b)});
+if(recent.length)document.getElementById('tgrecentrow').hidden=false;
+let busy=false;
+async function save(){const v=inp.value.trim();if(!v){msg.textContent='Type a tag first, or press → to skip.';inp.focus();return}
+  if(busy)return;busy=true;msg.textContent='Saving…';
+  try{const r=await fetch('/tagging/'+PID,{method:'POST',credentials:'same-origin',body:new URLSearchParams({add:v})});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const words=v.split(/\s+/).filter(Boolean);
+    try{localStorage.setItem('mb-tag-last',words.join(' '));
+      localStorage.setItem('mb-tag-recent',JSON.stringify([...words,...recent.filter(t=>!words.includes(t))].slice(0,20)))}catch(e){}
+    try{sessionStorage.setItem('mb-stale','1')}catch(e){}
+    go(SKIP)   // this post left the list, so the next one is at the same place
+  }catch(e){busy=false;msg.textContent='Could not save: '+e.message}}
+document.getElementById('tgsave').onclick=save;
+document.getElementById('tgskip').onclick=()=>go(SKIP+1);
+document.getElementById('tgback').onclick=()=>go(SKIP-1);
+document.getElementById('tglast').onclick=()=>{inp.value=last+' ';inp.focus()};
+document.getElementById('tgform').addEventListener('submit',e=>{e.preventDefault();save()});
+inp.addEventListener('keydown',e=>{if(e.defaultPrevented)return;   // the suggestion list used the key
+  if(e.key==='Enter'){e.preventDefault();save();return}
+  if(inp.value.trim())return;
+  if(e.key==='ArrowRight'){e.preventDefault();go(SKIP+1)}else if(e.key==='ArrowLeft'&&SKIP>0){e.preventDefault();go(SKIP-1)}
+  else if(e.key==='ArrowUp'&&last){e.preventDefault();inp.value=last+' '}});
+document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,select')||e.ctrlKey||e.metaKey||e.altKey)return;
+  if(e.key==='ArrowRight'){e.preventDefault();go(SKIP+1)}else if(e.key==='ArrowLeft'&&SKIP>0){e.preventDefault();go(SKIP-1)}
+  else if(e.key==='ArrowUp'&&last){e.preventDefault();inp.value=last+' ';inp.focus()}});
+const main=document.querySelector('.tgmain');
+document.querySelectorAll('.tgth').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tgth').forEach(x=>x.classList.toggle('on',x===t));
+  document.getElementById('tgno').textContent=t.dataset.i;
+  main.innerHTML=t.dataset.img==='1'?'<img alt="">':'<video controls muted loop autoplay playsinline></video>';
+  main.firstChild.src=t.dataset.src});
+})();
+</script>
+{% endif %}
+{% endblock %}
