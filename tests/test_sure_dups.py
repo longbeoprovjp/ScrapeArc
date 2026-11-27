@@ -126,3 +126,37 @@ def test_review_page_opens_on_the_matching_picture(data):
     assert r.status_code == 200
     assert "closest match" in r.text and 'Picture <span class="dno">2</span> of 2' in r.text
     assert r.text.count('data-i="') == 2                   # every picture of the multi-file post is listed
+
+
+def test_needs_tags_view(data):
+    from minibooru.web import create_app
+    with core.connect() as c:
+        bare = post(c, data, "bare", (40, 30), "red", [], source="upload")
+        tagged = post(c, data, "tagged", (40, 30), "blue", ["robin"], source="upload")
+        scraped = post(c, data, "scr", (40, 30), "green", ["sparrow"], source="https://example.com/p/1")
+    cl = TestClient(create_app())
+    r = cl.get("/?view=untagged")
+    assert r.status_code == 200 and "Needs tags" in r.text and "1 post" in r.text
+    assert f"/post/{bare}" in r.text and f"/post/{tagged}\"" not in r.text and f"/post/{scraped}\"" not in r.text
+
+
+def test_single_picture_inside_a_multi_file_post(data):
+    with core.connect() as c:
+        # a scraped post with three pictures, and a phone upload of its second picture
+        Image.new("RGB", (60, 60), "red").save(data / "m1.png")
+        im = Image.new("RGB", (400, 300), "white")
+        from PIL import ImageDraw
+        ImageDraw.Draw(im).rectangle([40, 40, 220, 200], fill="black")
+        im.save(data / "m2.png")
+        Image.new("RGB", (80, 80), "blue").save(data / "m3.png")
+        multi = core.ingest(c, data / "m1.png", ["heron"], source="https://example.com/p/7")[0]
+        for f in ("m2.png", "m3.png"):
+            core.add_media(c, multi, data / f)
+        im.resize((200, 150)).save(data / "phone.png")
+        single = core.ingest(c, data / "phone.png", ["phone", core.UPLOAD_TAG], source="upload")[0]
+        a, b = sorted((multi, single))
+        c.execute("INSERT OR IGNORE INTO dup_flags(a, b, dist) VALUES (?,?,0)", (a, b))
+        m2 = core.file_sha(data / "m2.png")
+        assert core.sure_duplicates(c, detail=True) == [(multi, single, m2)]   # matched its 2nd picture
+        assert core.resolve_duplicate(c, multi, single)
+        assert tags(c, multi) == ["heron", "phone"] and len(core.post_files(c, multi)) == 3

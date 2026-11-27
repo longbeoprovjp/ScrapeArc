@@ -14,11 +14,11 @@
 {% if not count %}
 <div class="empty"><b>No sure duplicates</b>{% if open_total %}The {{ "{:,}".format(open_total) }} pairs still open need a look by hand: <a href="/dups/review">review them</a>.{% else %}Nothing is flagged right now.{% endif %}</div>
 {% else %}
-<p><b>{{ "{:,}".format(count) }}</b> pair{{ '' if count == 1 else 's' }} are certainly the same picture: single pictures with the same shape and
-almost identical content (of {{ "{:,}".format(open_total) }} possible duplicates). For each, the bigger picture is kept
-(then the bigger file, then the older post). The copy's tags, favorite star and scrape record move to the one kept, except
+<p><b>{{ "{:,}".format(count) }}</b> pair{{ ' is' if count == 1 else 's are' }} certainly the same picture: two single pictures with the same shape and almost identical
+content, or a single picture that is already one of the pictures of a post with several files (of {{ "{:,}".format(open_total) }} possible duplicates). For each, the bigger picture is kept
+(then the bigger file, then the older post); a post with several files is kept whole. The copy's tags, favorite star and scrape record move to the one kept, except
 the <b>upload</b> tag, which stays only on posts you uploaded yourself. A later scrape won't save the copy again.</p>
-<p class="mut">Videos, posts with several files and less certain pairs are left for <a href="/dups/review">review by hand</a>.
+<p class="mut">Videos, two posts that both have several files, and less certain pairs are left for <a href="/dups/review">review by hand</a>.
 Below are the first {{ sample|length }}: green is kept, the other is deleted.</p>
 <form method="post" action="/dups/sure" onsubmit="return confirm('Delete {{ count }} copies, keeping the better picture of each pair? This can\'t be undone.')">
 <input type="hidden" name="expect" value="{{ count }}">
@@ -26,7 +26,7 @@ Below are the first {{ sample|length }}: green is kept, the other is deleted.</p
 <div class="sgrid">{% for s in sample %}<div class="spair">
 {% for p, kind in ((s.keep, 'skeep'), (s.drop, 'sdrop')) %}<div><a class="{{ kind }}" href="/post/{{ p.id }}" target="_blank" rel="noopener">
 <img src="/thumbs/{{ p.sha256 }}.jpg" alt="" loading="lazy"><span class="lab">{{ 'Keep' if kind == 'skeep' else 'Delete' }}</span></a>
-<div class="sz mut">{{ p.width }}×{{ p.height }}{% if p.source == 'upload' %} · upload{% endif %}</div></div>{% endfor %}
+<div class="sz mut">{{ p.width }}×{{ p.height }}{% if p.nfiles and p.nfiles > 1 %} · one of its {{ p.nfiles }} files{% endif %}{% if p.source == 'upload' %} · upload{% endif %}</div></div>{% endfor %}
 </div>{% endfor %}</div>
 {% endif %}
 {% endblock %}

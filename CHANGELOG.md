@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Needs tags** filter: posts with no tag besides upload.
+- **Sure duplicates** also clears a single picture that is already one of the pictures of a post with several files
+  (that post is kept whole).
+- Tags page: explanations and lists in boxes, like the Scrape and Stats pages.
 - **Duplicate review** lists every picture of both posts; click one to see it big. It opens on the two closest
   pictures, so a single picture's match inside a post with several files is in front of you.
 - The image now uses Python 3.15 (was 3.12) and FastAPI 0.163.1; build tooling updated.

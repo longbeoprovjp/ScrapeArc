@@ -2,6 +2,7 @@
 <div class="gbar"><span class="gcount">{{ total }} post{{ '' if total == 1 else 's' }}{% if q %} <span class="mut">for “{{ q }}”</span>{% endif %}</span><button type="button" id="up-open">＋ Upload</button></div>
 {% set sort_action = '/' %}{% include "_sort.html" %}
 {% if title_words %}<p class="mut tw">No tag named {% for w in title_words %}<b>{{ w.lstrip('-') }}</b>{{ ', ' if not loop.last }}{% endfor %}, so {{ 'that word was' if title_words|length == 1 else 'those words were' }} looked for in post titles instead.</p>{% endif %}
+{% if view == 'untagged' and total %}<p class="note">🏷 Posts with no tags except <b>upload</b>. Tick several with <b>☑ Select posts</b>, then <b>Edit tags</b> to tag them all at once; they leave this list as you go.</p>{% endif %}
 {% if view == 'dups' and total %}<p class="note">⚖ <a href="/dups/review"><b>Review them one pair at a time</b></a>: side by side, keep one with a key press. Or <a href="/dups/sure"><b>clear the sure ones at once</b></a>.</p>{% endif %}
 {% include "_grid.html" %}
 {% include "_pager.html" %}

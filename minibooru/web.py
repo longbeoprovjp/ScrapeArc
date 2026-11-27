@@ -671,12 +671,15 @@ def create_app(scheduler: bool = False) -> FastAPI:
     def dups_sure(request: Request, done: int = -1):
         """Pairs that are certainly the same picture, resolved all at once after a look at a sample."""
         with core.connect() as c:
-            pairs = core.sure_duplicates(c)
+            pairs = core.sure_duplicates(c, detail=True)
             open_total = c.execute("SELECT COUNT(*) FROM dup_flags WHERE status='open'").fetchone()[0]
             sample = []
-            for keep, drop in pairs[:30]:
-                k, d = (c.execute("SELECT id, sha256, width, height, source FROM posts WHERE id=?", (i,)).fetchone()
+            for keep, drop, sha in pairs[:30]:
+                k, d = (dict(c.execute("SELECT id, sha256, width, height, source FROM posts WHERE id=?", (i,)).fetchone())
                         for i in (keep, drop))
+                files = core.post_files(c, keep)
+                f = next((x for x in files if x["sha"] == sha), files[0])
+                k.update(sha256=f["sha"], width=f["w"], height=f["h"], nfiles=len(files))   # show the matching picture
                 sample.append({"keep": k, "drop": d})
         return tpl.TemplateResponse(request, "dups_sure.html", {"count": len(pairs), "sample": sample,
                                                                  "open_total": open_total, "done": done})

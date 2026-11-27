@@ -19,13 +19,16 @@
 .letter h4 .lsel{display:none;font-size:11px;padding:1px 6px;margin-top:2px}
 .selecting .letter h4 .lsel{display:block}
 h3 .cnt{font-weight:500;font-size:13px;color:var(--mut)}
+.tbox{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:6px 14px;margin:8px 0}
+.tbox ul{margin:0;padding:0;list-style:none}.tbox li{padding:5px 0;border-top:1px solid var(--line)}.tbox li:first-child{border-top:none}
+.tbox .row{margin:6px 0}
 #tagdlg .meta{display:flex;gap:16px;margin:0 0 12px}
 #tagdlg .meta div{background:color-mix(in srgb,var(--fg) 5%,var(--card));border-radius:10px;padding:6px 12px}
 #tagdlg .meta b{display:block;font-size:18px}
 #tagdlg form,#tagdlg .row{margin:8px 0}
 </style>
 <h2>Tags</h2>
-<p class="mut">Tags are grouped by type{% if types|length > 1 %} ({% for k, col in types %}<b style="color:{{ col }}">{{ k }}</b>{{ ', ' if not loop.last }}{% endfor %}){% endif %}. Click a tag to view its posts, change its type or delete it. Types and the scraping rule are under <a href="#types">Tag types</a>.</p>
+<p class="note">Tags are grouped by type{% if types|length > 1 %} ({% for k, col in types %}<b style="color:{{ col }}">{{ k }}</b>{{ ', ' if not loop.last }}{% endfor %}){% endif %}. Click a tag to view its posts, change its type or delete it. Types and the scraping rule are under <a href="#types">Tag types</a>.</p>
 <form action="/tags/bulk-delete" method="post" id="bulkform" onsubmit="return !event.submitter||!event.submitter.formAction.endsWith('/tags/bulk-delete')||confirm('Delete the ' + document.querySelectorAll('.pick:checked').length + ' selected tag(s)?')">
 <div class="row"><button type="button" class="ghost" id="selmode">Select several…</button></div>
 <div class="row bulk sticky"><span class="mut"><b id="selcount">0</b> selected</span><button class="danger">Delete selected</button>
@@ -41,12 +44,12 @@ h3 .cnt{font-weight:500;font-size:13px;color:var(--mut)}
 {% endmacro %}
 {% for kind, color, groups in sections if kind != other %}
 <h3><span style="color:{{ color }}">●</span> {{ kind|replace('_', ' ')|capitalize }} <span class="cnt">{{ total(groups) }}</span></h3>
-{% if groups %}{{ section(kind, groups) }}{% else %}<p class="mut">No {{ kind|replace('_', ' ') }} tags yet.</p>{% endif %}
+{% if groups %}{{ section(kind, groups) }}{% else %}<p class="note">No {{ kind|replace('_', ' ') }} tags yet.</p>{% endif %}
 {% endfor %}
 {% for kind, color, groups in sections if kind == other %}{% if groups %}
 {% if sections|length > 1 %}<details style="margin-top:16px"><summary>Other tags ({{ total(groups) }}), hidden: tags without a type of their own</summary>{{ section(kind, groups) }}</details>
 {% else %}<h3>All tags <span class="cnt">{{ total(groups) }}</span></h3>{{ section(kind, groups) }}{% endif %}
-{% elif sections|length == 1 %}<p class="mut">No tags yet.</p>{% endif %}{% endfor %}
+{% elif sections|length == 1 %}<p class="note">No tags yet.</p>{% endif %}{% endfor %}
 </form>
 <dialog id="tagdlg"><div class="in">
 <h3 id="td-name"></h3>
@@ -59,7 +62,7 @@ h3 .cnt{font-weight:500;font-size:13px;color:var(--mut)}
 <div class="row" style="justify-content:flex-end"><button type="button" class="ghost" id="td-close">Close</button></div>
 </div></dialog>
 <h3 id="types">Tag types</h3>
-<p class="mut">Types group your tags and give them a colour (for example person, artist, place). <b>other</b> always exists and holds every tag without a type of its own. Deleting a type moves its tags to other.</p>
+<p class="note">Types group your tags and give them a colour (for example person, artist, place). <b>other</b> always exists and holds every tag without a type of its own. Deleting a type moves its tags to other.</p>
 <div class="panel" style="background:var(--card);padding:8px 14px;border-radius:var(--radius);box-shadow:var(--shadow)">
 {% for k, col in types %}<form class="row" method="post" action="/tags/types/edit" style="margin:6px 0"><input type="hidden" name="name" value="{{ k }}">
 <input type="color" name="color" value="{{ col }}" title="Colour" style="width:42px;padding:2px">
@@ -70,17 +73,17 @@ h3 .cnt{font-weight:500;font-size:13px;color:var(--mut)}
 <form class="row" method="post" action="/tags/types/add" style="margin:10px 0 6px"><input name="name" placeholder="new type, e.g. person" maxlength="24" required style="width:220px"><button>Add type</button></form>
 </div>
 <h4 style="margin:14px 0 4px">Scraping: type tags by their position</h4>
-<p class="mut" style="margin:0 0 6px">Many sites list a post's tags in a fixed order, for example the author first. The scraper and the bookmark can use that order. Leave everything on <b>other</b> to skip it. Saving a single post gives all its tags the "in between" type.</p>
+<p class="note" style="margin:0 0 6px">Many sites list a post's tags in a fixed order, for example the author first. The scraper and the bookmark can use that order. Leave everything on <b>other</b> to skip it. Saving a single post gives all its tags the "in between" type.</p>
 <form class="row" method="post" action="/tags/rule">
 {% for field, label in [('first', 'First tag'), ('middle', 'Tags in between'), ('last', 'Last tag')] %}{% set cur = rule[loop.index0] %}<label class="mut">{{ label }} <select name="{{ field }}">{% for k in cats %}<option value="{{ k }}" {{ 'selected' if cur == k }}>{{ k }}</option>{% endfor %}</select></label>{% endfor %}
 <button class="ghost">Save rule</button></form>
-{% if blocked %}<h3>Blocked tags</h3><p class="mut">Never added to posts on import.</p>{% for b in blocked %}<form class="row" style="display:inline-flex" action="/tags/unblock" method="post"><input type="hidden" name="name" value="{{ b }}"><span>{{ b }}</span><button>Unblock</button></form> {% endfor %}{% endif %}
-<h3>Aliases</h3><p class="mut">An alias redirects a name to a tag, both when tagging and searching.</p>
+{% if blocked %}<h3>Blocked tags</h3><p class="note">Never added to posts on import.</p><div class="tbox">{% for b in blocked %}<form class="row" style="display:inline-flex;margin-right:10px" action="/tags/unblock" method="post"><input type="hidden" name="name" value="{{ b }}"><span>{{ b }}</span><button class="ghost">Unblock</button></form>{% endfor %}</div>{% endif %}
+<h3>Aliases</h3><p class="note">An alias redirects a name to a tag, both when tagging and searching.</p>
 <form class="row" action="/tags/alias" method="post"><input name="alias" placeholder="alias" required><input name="target" placeholder="→ tag" required><button>Add alias</button></form>
-<ul>{% for a in aliases %}<li>{{ a[0] }} → {{ a[1] }}</li>{% endfor %}</ul>
-<h3>Implications</h3><p class="mut">Tagging the first tag automatically adds the second (e.g. robin → bird).</p>
+<div class="tbox">{% if aliases %}<ul>{% for a in aliases %}<li>{{ a[0] }} → {{ a[1] }}</li>{% endfor %}</ul>{% else %}<p class="mut" style="margin:4px 0">No aliases yet.</p>{% endif %}</div>
+<h3>Implications</h3><p class="note">Tagging the first tag automatically adds the second (e.g. robin → bird).</p>
 <form class="row" action="/tags/implication" method="post"><input name="tag" placeholder="tag" required><input name="implies" placeholder="implies" required><button>Add implication</button></form>
-<ul>{% for i in imps %}<li>{{ i[0] }} ⇒ {{ i[1] }}</li>{% endfor %}</ul>
+<div class="tbox">{% if imps %}<ul>{% for i in imps %}<li>{{ i[0] }} ⇒ {{ i[1] }}</li>{% endfor %}</ul>{% else %}<p class="mut" style="margin:4px 0">No implications yet.</p>{% endif %}</div>
 <script>
 (function(){
 const form=document.getElementById('bulkform'), dlg=document.getElementById('tagdlg'), del=document.getElementById('td-del');

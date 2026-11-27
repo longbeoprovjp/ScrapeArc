@@ -636,29 +636,52 @@ def closest_files(c, fa: list, fb: list):
 SURE_MAX_DIST = 2   # of 64 fingerprint bits; IMG_MAX_DIST (5) flags a pair, this close counts as certain
 
 
-def sure_duplicates(c, data=None) -> list[tuple[int, int]]:
-    """Open look-alike pairs that are certainly the same picture: two single-file picture posts, fingerprints at most
-    SURE_MAX_DIST bits apart and the same shape. Returns (keep, drop) pairs: keep the bigger picture, then the bigger
-    file, then the older post. Videos, multi-file posts and less certain pairs are left for review by hand."""
+def _same_shape(a: dict, b: dict) -> bool:
+    return bool(a["w"] and a["h"] and b["w"] and b["h"]) and abs(a["w"] / a["h"] - b["w"] / b["h"]) < 0.02
+
+
+def sure_duplicates(c, data=None, detail=False) -> list:
+    """Open look-alike pairs that are certainly the same picture, as (keep, drop) pairs ((keep, drop, sha of the kept
+    post's matching file) with detail=True). Two kinds:
+      * two single-picture posts, fingerprints at most SURE_MAX_DIST bits apart and the same shape: keep the bigger
+        picture, then the bigger file, then the older post;
+      * a single picture that is already one of the pictures of a multi-file post (same test against its closest
+        file): the multi-file post is kept, so none of its pictures is lost. Left for review by hand when the single
+        picture is sharper than the copy inside the other post.
+    Videos, two multi-file posts and less certain pairs are left for review by hand."""
     base = Path(data) if data else DATA
-    rows = c.execute("""SELECT f.a, f.b FROM dup_flags f JOIN posts pa ON pa.id=f.a JOIN posts pb ON pb.id=f.b
-        WHERE f.status='open' AND f.dist <= ? AND pa.mime LIKE 'image/%' AND pb.mime LIKE 'image/%'
-          AND pa.width > 0 AND pa.height > 0 AND pb.width > 0 AND pb.height > 0
-          AND ABS(1.0 * pa.width / pa.height - 1.0 * pb.width / pb.height) < 0.02
-          AND NOT EXISTS (SELECT 1 FROM post_media m WHERE m.post_id IN (f.a, f.b))
-        ORDER BY f.dist, f.a, f.b""", (SURE_MAX_DIST,)).fetchall()
 
     def rank(pid):
         p = c.execute("SELECT sha256, ext, width, height FROM posts WHERE id=?", (pid,)).fetchone()
         f = base / "files" / p[0][:2] / f"{p[0]}.{p[1]}"
         return (p[2] * p[3], f.stat().st_size if f.exists() else 0, -pid)
 
-    out, gone = [], set()
-    for a, b in rows:
-        if a in gone or b in gone:   # chains (a~b, b~c): each post is removed at most once
-            continue
+    found = []
+    for a, b in c.execute("""SELECT f.a, f.b FROM dup_flags f JOIN posts pa ON pa.id=f.a JOIN posts pb ON pb.id=f.b
+        WHERE f.status='open' AND f.dist <= ? AND pa.mime LIKE 'image/%' AND pb.mime LIKE 'image/%'
+          AND pa.width > 0 AND pa.height > 0 AND pb.width > 0 AND pb.height > 0
+          AND ABS(1.0 * pa.width / pa.height - 1.0 * pb.width / pb.height) < 0.02
+          AND NOT EXISTS (SELECT 1 FROM post_media m WHERE m.post_id IN (f.a, f.b))
+        ORDER BY f.dist, f.a, f.b""", (SURE_MAX_DIST,)).fetchall():
         keep, drop = (a, b) if rank(a) >= rank(b) else (b, a)
-        out.append((keep, drop))
+        found.append((keep, drop, c.execute("SELECT sha256 FROM posts WHERE id=?", (keep,)).fetchone()[0]))
+    for a, b in c.execute("""SELECT f.a, f.b FROM dup_flags f WHERE f.status='open'
+        AND EXISTS (SELECT 1 FROM post_media m WHERE m.post_id IN (f.a, f.b)) ORDER BY f.dist, f.a, f.b""").fetchall():
+        fa, fb = post_files(c, a), post_files(c, b)
+        if (len(fa) == 1) == (len(fb) == 1):          # two multi-file posts: by hand
+            continue
+        single, multi, fs, fm = (a, b, fa, fb) if len(fa) == 1 else (b, a, fb, fa)
+        m = closest_files(c, fs, fm)
+        if not fs[0]["is_image"] or not m or m[2] > SURE_MAX_DIST or not _same_shape(fs[0], fm[m[1]]):
+            continue
+        if fm[m[1]]["w"] * fm[m[1]]["h"] < fs[0]["w"] * fs[0]["h"]:   # the single one is sharper: by hand
+            continue
+        found.append((multi, single, fm[m[1]]["sha"]))
+    out, gone = [], set()
+    for keep, drop, sha in found:
+        if keep in gone or drop in gone:   # chains (a~b, b~c): each post is removed at most once
+            continue
+        out.append((keep, drop, sha) if detail else (keep, drop))
         gone.add(drop)
     return out
 
@@ -921,13 +944,15 @@ def keyword_match(text: str, keywords) -> list[str]:
 # "view" filter on the post list: which kind of posts to show
 VIEWS = {"all": "All posts", "videos": "Videos", "images": "Images", "fav": "Favorite",
          "fav_videos": "Favorite Videos", "fav_images": "Favorite Pics", "dups": "Possible duplicates",
-         "bookmarked": "Bookmarked"}
+         "bookmarked": "Bookmarked", "untagged": "Needs tags"}
 BOOKMARK_SQL = "p.id IN (SELECT post_id FROM scraped WHERE status='bookmark')"   # saved with the Save bookmark
 # second filter next to the view: everything / only things you uploaded / only scraped & imported (by the 'upload' tag)
 SOURCES = {"all": "Everything", "upload": "Uploads", "scraped": "Not uploads"}
 UPLOAD_TAG = "upload"
 # both are worked out once per query (not once per post): with 30,000+ posts the per-post form took 14 s and 190 s a page
 DUP_SQL = "p.id IN (SELECT a FROM dup_flags WHERE status='open' UNION ALL SELECT b FROM dup_flags WHERE status='open')"
+# no tag except 'upload' (e.g. phone uploads still to sort); the tagged list is worked out once per query, like the two above
+UNTAGGED_SQL = "p.id NOT IN (SELECT post_id FROM post_tags WHERE tag_id IS NOT (SELECT id FROM tags WHERE name='upload'))"
 
 
 def parse_query(q: str):
@@ -995,6 +1020,8 @@ def _filters(c, q: str, view: str = "all", src: str = "all"):
         where.append(DUP_SQL)
     if view == "bookmarked":
         where.append(BOOKMARK_SQL)
+    if view == "untagged":
+        where.append(UNTAGGED_SQL)
     if src in ("upload", "scraped"):
         tid = lookup_tag(c, UPLOAD_TAG)
         if tid is None:
