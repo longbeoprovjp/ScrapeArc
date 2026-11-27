@@ -455,7 +455,8 @@ def ingest(c, path, tags=(), title="", source="", data=None, posted=None):
     path = Path(path)
     base = Path(data) if data else DATA
     sha, ext, mime, width, height, _ = _store(path, base)
-    row = c.execute("SELECT id FROM posts WHERE sha256=?", (sha,)).fetchone()
+    row = c.execute("SELECT id FROM posts WHERE sha256=? UNION ALL SELECT post_id FROM post_media WHERE sha256=? LIMIT 1",
+                    (sha, sha)).fetchone()   # also inside multi-file posts (e.g. merged ones)
     if row:
         add_tags(c, row[0], tags)
         if posted:
@@ -509,6 +510,34 @@ def delete_post(c, pid: int, data=None) -> bool:
     for sha, ext in files:
         _remove_file_if_unused(c, base, sha, ext)
     return True
+
+
+def merge_posts(c, ids) -> int | None:
+    """Merge posts into the first one (in the order given): it gets every file of the others (after its own, in order,
+    each file once), all their tags, and the favorite star if any had it; their scrape records point at it, so a
+    rescan doesn't save them again. The other posts are removed; no file is deleted. Returns the merged post's id."""
+    ids = list(dict.fromkeys(int(i) for i in ids))
+    ids = [i for i in ids if c.execute("SELECT 1 FROM posts WHERE id=?", (i,)).fetchone()]
+    if len(ids) < 2:
+        return ids[0] if ids else None
+    target, others = ids[0], ids[1:]
+    have = {f["sha"] for f in post_files(c, target)}
+    pos = c.execute("SELECT COALESCE(MAX(pos), 0) FROM post_media WHERE post_id=?", (target,)).fetchone()[0]
+    for pid in others:
+        for f in post_files(c, pid):
+            if f["sha"] not in have:
+                pos += 1
+                have.add(f["sha"])
+                c.execute("INSERT INTO post_media VALUES (?,?,?,?,?,?,?)",
+                          (target, pos, f["sha"], f["ext"], f["mime"], f["w"], f["h"]))
+    q = ",".join("?" * len(others))
+    c.execute(f"INSERT OR IGNORE INTO post_tags SELECT ?, tag_id FROM post_tags WHERE post_id IN ({q})", (target, *others))
+    c.execute(f"UPDATE posts SET favorite=MAX(favorite, (SELECT MAX(favorite) FROM posts WHERE id IN ({q}))) WHERE id=?",
+              (*others, target))
+    c.execute(f"UPDATE scraped SET post_id=? WHERE post_id IN ({q})", (target, *others))
+    c.execute(f"UPDATE deleted_media SET post_id=? WHERE post_id IN ({q})", (target, *others))
+    c.execute(f"DELETE FROM posts WHERE id IN ({q})", others)   # cascades: their post_media, post_tags, dup_flags
+    return target
 
 
 def _remove_file_if_unused(c, base: Path, sha: str, ext: str) -> bool:

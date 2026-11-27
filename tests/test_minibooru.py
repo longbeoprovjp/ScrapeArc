@@ -584,6 +584,40 @@ def test_upload_several_files_as_one_post(env, tmp_path, monkeypatch):
         assert c.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 3        # without the box: one post per file
 
 
+def test_merge_selected_posts(env, tmp_path, monkeypatch):
+    """Select posts -> Merge: the first post gets every file (once, in order) and every tag, keeps its title, gets
+    the favorite star if any had it; scrape records follow it; the others are gone but no file is deleted."""
+    from fastapi.testclient import TestClient
+    from minibooru.web import create_app
+    monkeypatch.delenv("MINIBOORU_PASSWORD", raising=False)
+    cl = TestClient(create_app())
+    up = lambda tags, *cs: cl.post("/upload", data={"tags": tags, "together": "1", "title": "t-" + cs[0]}, follow_redirects=False,
+                                   files=[("files", (f"{c}.png", _pic(tmp_path / f"{c}.png", c).read_bytes(), "image/png")) for c in cs])
+    a, b, d = (int(up(t, *cs).headers["location"].rsplit("/", 1)[-1])
+               for t, cs in (("cat", ("red", "blue")), ("dog", ("green",)), ("fox", ("yellow", "blue"))))
+    with core.connect() as c:
+        c.execute("UPDATE posts SET favorite=1 WHERE id=?", (d,))
+        c.execute("INSERT INTO scraped(post_url, post_id, status) VALUES ('u1', ?, 'ok')", (b,))
+    assert 'id="sel-merge"' in cl.get("/").text
+    assert cl.post("/posts/bulk-merge", data={"ids": [str(a)]}).status_code == 400          # needs two
+    r = cl.post("/posts/bulk-merge", data={"ids": [str(a), str(b), str(d)]}, follow_redirects=False)
+    assert r.headers["location"] == f"/post/{a}"
+    with core.connect() as c:
+        assert [f["sha"] for f in core.post_files(c, a)] == list(dict.fromkeys(
+            core.file_sha(tmp_path / f"{x}.png") for x in ("red", "blue", "green", "yellow")))
+        assert {t["name"] for t in core.post_tags(c, a)} >= {"cat", "dog", "fox", "upload"}
+        row = c.execute("SELECT title, favorite FROM posts WHERE id=?", (a,)).fetchone()
+        assert tuple(row) == ("t-red", 1)
+        assert c.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 1
+        assert c.execute("SELECT post_id FROM scraped WHERE post_url='u1'").fetchone()[0] == a
+        for f in core.post_files(c, a):
+            assert (core.DATA / "files" / f["sha"][:2] / f"{f['sha']}.{f['ext']}").exists()
+        # a file now inside the merged post is recognised as already saved, not made into a new post
+        pid, how = core.ingest(c, tmp_path / "green.png", ["owl"])
+        assert (pid, how) == (a, "duplicate") and c.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 1
+    assert cl.get(f"/post/{a}").status_code == 200
+
+
 def test_upload_in_chunks_skips_empty_files(env, tmp_path, monkeypatch):
     """The upload window sends chunks (ajax=1); "one post" chunks after the first add to that post; empty files
     (what iPhone Safari sends for a photo it couldn't get) are skipped and reported, not a 422 for the whole batch."""

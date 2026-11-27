@@ -9,25 +9,34 @@
 <span class="gridpick gp-desk nosel" data-k="colsd" title="Posts per row on this computer"><span class="mut">Per row</span><button type="button" data-v="">Auto</button><button type="button" data-v="4">4</button><button type="button" data-v="6">6</button><button type="button" data-v="8">8</button></span>
 <span class="gridpick gp-phone nosel" data-k="colsm" title="Posts per row on this phone"><span class="mut">Per row</span><button type="button" data-v="">Auto</button><button type="button" data-v="1">1</button><button type="button" data-v="2">2</button><button type="button" data-v="4">4</button></span>
 <span class="mut sel-only" id="sel-count">0 selected</span>
+<button class="sel-only" id="sel-merge" formaction="/posts/bulk-merge" disabled title="Put the selected posts together as one post, with all their files and tags">⧉ Merge into one</button>
 <button class="danger sel-only" id="sel-del" disabled>🗑 Delete selected</button>
 </div>
 {% if not posts %}<div class="empty"><b>Nothing here yet</b>Upload something, run a scrape, or try a different filter.</div>{% endif %}
-<div class="grid">{% for p in posts %}<div class="cell"><input class="pick-box" type="checkbox" name="ids" value="{{ p.id }}" aria-label="Select post {{ p.id }}"><a href="/post/{{ p.id }}{{ post_qs }}" title="{{ p.title }}">
+<div class="grid">{% for p in posts %}<div class="cell"><input class="pick-box" type="checkbox" autocomplete="off" name="ids" value="{{ p.id }}" aria-label="Select post {{ p.id }}"><a href="/post/{{ p.id }}{{ post_qs }}" title="{{ p.title }}">
 <img loading="lazy" src="/thumbs/{{ p.sha256 }}.jpg" alt="{{ p.title }}" onerror="this.style.display='none'">{% if p.mime.startswith('video/') %}<span class="badge">▶ video</span>{% endif %}{% if p.dup %}<span class="badge" style="top:30px;background:#c77d00">⚠ dup</span>{% endif %}{% if p.nfiles > 1 %}<span class="badge" style="right:auto;left:6px" title="{{ p.nfiles }} files in this post">{{ p.nfiles }}</span>{% endif %}{% if p.favorite %}<span class="badge" style="right:auto;left:6px;top:30px">★</span>{% endif %}<span class="cap">{{ p.title }}</span></a>
 <div class="chips">{% set pt = ptags.get(p.id, []) %}{% for name, color in pt[:8] %}<a class="chip" style="--c:{{ color }}" href="/tag/{{ name|urlencode }}">{{ name }}</a>{% endfor %}{% if pt|length > 8 %}<a class="chip more" href="/post/{{ p.id }}">+{{ pt|length - 8 }}</a>{% endif %}</div></div>{% endfor %}</div>
 </form>
 <script>
 (function(){const f=document.getElementById('bulk'),boxes=()=>[...f.querySelectorAll('.pick-box')];
 function upd(){const n=boxes().filter(b=>b.checked).length;f.querySelectorAll('.cell').forEach(c=>c.classList.toggle('on',c.querySelector('.pick-box').checked));
-document.getElementById('sel-count').textContent=n+' selected';document.getElementById('sel-del').disabled=!n}
+document.getElementById('sel-count').textContent=n+' selected';document.getElementById('sel-del').disabled=!n;document.getElementById('sel-merge').disabled=n<2}
+let via=null;f.querySelectorAll('button[id^=sel-]').forEach(b=>b.addEventListener('click',()=>{via=b.id}));
 function mode(on){f.classList.toggle('selecting',on);if(!on)boxes().forEach(b=>b.checked=false);upd()}
 document.getElementById('sel-on').onclick=()=>mode(true);document.getElementById('sel-off').onclick=()=>mode(false);
 document.getElementById('sel-page').onclick=()=>{boxes().forEach(b=>b.checked=true);upd()};
 document.getElementById('sel-none').onclick=()=>{boxes().forEach(b=>b.checked=false);upd()};
 f.addEventListener('change',upd);
+// Back after Merge/Delete shows the browser's old copy of this list (gone posts, old ticks): load it fresh instead.
+const KEY='mb-grid-changed',back=()=>{try{return performance.getEntriesByType('navigation')[0].type==='back_forward'}catch(e){return false}};
+function fresh(persisted){let changed=false;try{changed=sessionStorage.getItem(KEY)===location.href;sessionStorage.removeItem(KEY)}catch(e){}
+  if(changed&&(persisted||back())){location.reload();return}mode(false)}
+window.addEventListener('pageshow',e=>fresh(e.persisted));
 f.addEventListener('click',e=>{if(!f.classList.contains('selecting'))return;const a=e.target.closest('.cell>a');if(!a)return;
 e.preventDefault();const b=a.parentElement.querySelector('.pick-box');b.checked=!b.checked;upd()});
-f.addEventListener('submit',e=>{const n=boxes().filter(b=>b.checked).length;
-if(!n||!confirm('Permanently delete '+n+' post'+(n==1?'':'s')+' and their files?'))e.preventDefault()});
+f.addEventListener('submit',e=>{const n=boxes().filter(b=>b.checked).length,merge=(e.submitter&&e.submitter.id||via)==='sel-merge';
+if(merge?(n<2||!confirm('Merge '+n+' posts into one? All their files and tags go into the one that comes first on this page (it keeps its title); the other '+(n-1)+' post'+(n==2?'':'s')+' disappear. No files are deleted.'))
+:(!n||!confirm('Permanently delete '+n+' post'+(n==1?'':'s')+(n==1?' and its files?':' and their files?')))){e.preventDefault();return}
+try{sessionStorage.setItem(KEY,location.href)}catch(err){}});
 })();
 </script>

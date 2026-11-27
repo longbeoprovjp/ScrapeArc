@@ -642,6 +642,14 @@ def create_app(scheduler: bool = False) -> FastAPI:
         return tpl.TemplateResponse(request, "dups.html", {"sides": sides, "dist": row["dist"] if row else None,
                                                            "total": total, "skip": skip, "hint": hint})
 
+    @app.post("/posts/bulk-merge")
+    def post_bulk_merge(ids: list[int] = Form([]), next: str = Form("/")):
+        with core.connect() as c:
+            pid = core.merge_posts(c, ids) if len(ids) > 1 else None
+        if pid is None:
+            raise HTTPException(400, "pick at least two posts to merge")
+        return RedirectResponse(f"/post/{pid}", 303)
+
     @app.post("/posts/bulk-delete")
     def post_bulk_delete(ids: list[int] = Form([]), next: str = Form("/")):
         with core.connect() as c:
