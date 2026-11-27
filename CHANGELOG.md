@@ -10,6 +10,10 @@
 - **Locked-drive safety**: with `MINIBOORU_DATA_REQUIRED=1` the app won't start a new, empty archive in a data
   folder whose encrypted drive isn't unlocked yet; it shows a "data is locked" page instead.
 - Docs: unlocking the encrypted drive with the TPM chip.
+- **Sure duplicates**: clear near-certain look-alike pairs at once (single pictures, same shape, almost identical)
+  after looking at a sample; the bigger picture is kept. Videos, multi-file posts and less certain pairs stay for review.
+- Resolving a duplicate keeps the copy's scrape record and remembers its file, so a rescan doesn't save it again, and the
+  **upload** tag no longer moves onto a post that wasn't uploaded (also for Select posts → Merge into one).
 
 ## 1.0.0
 

@@ -4,7 +4,8 @@ Idea: shrink the picture to 9x8 grey pixels and record, for each row, whether ea
 neighbour. That is 64 bits (a "difference hash"). Copies of the same picture give almost the same bits; unrelated
 pictures differ in about half of them. The number of differing bits is the Hamming distance.
 Videos: the same fingerprint of a few frames spread over the clip.
-Matches are only ever FLAGGED for you to review, never deleted automatically.
+Matches are only FLAGGED. Nothing is deleted unless you choose it: one pair at a time, or the near-certain
+ones all at once after a look at a sample (core.sure_duplicates, /dups/sure).
 """
 import shutil
 import subprocess

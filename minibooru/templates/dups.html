@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% block title %}Review duplicates · {{ brand.name }}{% endblock %}{% block body %}
 <div class="dhead"><h2>Review duplicates</h2>
 <span class="mut">{% if total %}Pair {{ skip + 1 }} of {{ total }}{% endif %}</span>
-<a href="/?view=dups" class="mut" style="margin-left:auto">See them as a list →</a></div>
+<a href="/dups/sure" class="mut" style="margin-left:auto">Clear the sure ones at once →</a><a href="/?view=dups" class="mut" style="margin-left:14px">See them as a list →</a></div>
 {% if not sides %}
 <div class="empty"><b>No possible duplicates left</b>Every flagged pair has been sorted out. New ones are flagged as posts come in.</div>
 {% else %}

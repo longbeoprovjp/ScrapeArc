@@ -579,13 +579,63 @@ def merge_posts(c, ids) -> int | None:
                 c.execute("INSERT INTO post_media VALUES (?,?,?,?,?,?,?)",
                           (target, pos, f["sha"], f["ext"], f["mime"], f["w"], f["h"]))
     q = ",".join("?" * len(others))
-    c.execute(f"INSERT OR IGNORE INTO post_tags SELECT ?, tag_id FROM post_tags WHERE post_id IN ({q})", (target, *others))
+    c.execute(f"INSERT OR IGNORE INTO post_tags SELECT ?, tag_id FROM post_tags WHERE post_id IN ({q}) AND tag_id IS NOT ?",
+              (target, *others, lookup_tag(c, UPLOAD_TAG)))   # 'upload' stays only if the merged post is an upload itself
     c.execute(f"UPDATE posts SET favorite=MAX(favorite, (SELECT MAX(favorite) FROM posts WHERE id IN ({q}))) WHERE id=?",
               (*others, target))
     c.execute(f"UPDATE scraped SET post_id=? WHERE post_id IN ({q})", (target, *others))
     c.execute(f"UPDATE deleted_media SET post_id=? WHERE post_id IN ({q})", (target, *others))
     c.execute(f"DELETE FROM posts WHERE id IN ({q})", others)   # cascades: their post_media, post_tags, dup_flags
     return target
+
+
+def resolve_duplicate(c, keep: int, drop: int, data=None) -> bool:
+    """`drop` is a copy of `keep`. `keep` gets drop's tags (but not the upload tag: that one only stays on a post that was
+    uploaded itself), its favorite star and its scrape records, and drop's file is remembered as removed, so a rescan
+    doesn't save the copy again. Then drop is deleted. Returns False if either post is gone."""
+    if keep == drop or c.execute("SELECT COUNT(*) FROM posts WHERE id IN (?,?)", (keep, drop)).fetchone()[0] != 2:
+        return False
+    c.execute("INSERT OR IGNORE INTO post_tags SELECT ?, tag_id FROM post_tags WHERE post_id=? AND tag_id IS NOT ?",
+              (keep, drop, lookup_tag(c, UPLOAD_TAG)))
+    c.execute("UPDATE posts SET favorite=MAX(favorite, (SELECT favorite FROM posts WHERE id=?)) WHERE id=?", (drop, keep))
+    c.execute("UPDATE scraped SET post_id=? WHERE post_id=?", (keep, drop))
+    c.execute("UPDATE deleted_media SET post_id=? WHERE post_id=?", (keep, drop))
+    keep_shas = {f["sha"] for f in post_files(c, keep)}
+    for f in post_files(c, drop):
+        if f["sha"] not in keep_shas:
+            c.execute("INSERT OR REPLACE INTO deleted_media(sha256, post_id) VALUES (?, ?)", (f["sha"], keep))
+    delete_post(c, drop, data)
+    return True
+
+
+SURE_MAX_DIST = 2   # of 64 fingerprint bits; IMG_MAX_DIST (5) flags a pair, this close counts as certain
+
+
+def sure_duplicates(c, data=None) -> list[tuple[int, int]]:
+    """Open look-alike pairs that are certainly the same picture: two single-file picture posts, fingerprints at most
+    SURE_MAX_DIST bits apart and the same shape. Returns (keep, drop) pairs: keep the bigger picture, then the bigger
+    file, then the older post. Videos, multi-file posts and less certain pairs are left for review by hand."""
+    base = Path(data) if data else DATA
+    rows = c.execute("""SELECT f.a, f.b FROM dup_flags f JOIN posts pa ON pa.id=f.a JOIN posts pb ON pb.id=f.b
+        WHERE f.status='open' AND f.dist <= ? AND pa.mime LIKE 'image/%' AND pb.mime LIKE 'image/%'
+          AND pa.width > 0 AND pa.height > 0 AND pb.width > 0 AND pb.height > 0
+          AND ABS(1.0 * pa.width / pa.height - 1.0 * pb.width / pb.height) < 0.02
+          AND NOT EXISTS (SELECT 1 FROM post_media m WHERE m.post_id IN (f.a, f.b))
+        ORDER BY f.dist, f.a, f.b""", (SURE_MAX_DIST,)).fetchall()
+
+    def rank(pid):
+        p = c.execute("SELECT sha256, ext, width, height FROM posts WHERE id=?", (pid,)).fetchone()
+        f = base / "files" / p[0][:2] / f"{p[0]}.{p[1]}"
+        return (p[2] * p[3], f.stat().st_size if f.exists() else 0, -pid)
+
+    out, gone = [], set()
+    for a, b in rows:
+        if a in gone or b in gone:   # chains (a~b, b~c): each post is removed at most once
+            continue
+        keep, drop = (a, b) if rank(a) >= rank(b) else (b, a)
+        out.append((keep, drop))
+        gone.add(drop)
+    return out
 
 
 def _remove_file_if_unused(c, base: Path, sha: str, ext: str) -> bool:

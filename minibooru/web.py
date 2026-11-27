@@ -572,10 +572,7 @@ def create_app(scheduler: bool = False) -> FastAPI:
             if action == "dismiss":      # not a duplicate: keep both, stop flagging
                 c.execute("UPDATE dup_flags SET status='dismissed' WHERE a=? AND b=?", (a, b))
             elif action == "merge":      # pid is the copy: its tags and favorite go to `other`, then pid is deleted
-                if c.execute("SELECT COUNT(*) FROM posts WHERE id IN (?,?)", (pid, other)).fetchone()[0] == 2:
-                    core.add_tags(c, other, [r["name"] for r in core.post_tags(c, pid)])
-                    c.execute("UPDATE posts SET favorite=MAX(favorite, (SELECT favorite FROM posts WHERE id=?)) WHERE id=?", (pid, other))
-                    core.delete_post(c, pid)
+                if core.resolve_duplicate(c, other, pid):
                     return RedirectResponse(f"/post/{other}", 303)
             else:
                 raise HTTPException(404)
@@ -669,6 +666,35 @@ def create_app(scheduler: bool = False) -> FastAPI:
                 seen = {r["name"] for r in rows}
                 rows += [r for r in c.execute(sql, ("%" + like + "%",)).fetchall() if r["name"] not in seen][:8 - len(rows)]
         return [{"name": r["name"], "color": r["color"], "n": r["n"]} for r in rows if r["n"]]
+
+    @app.get("/dups/sure")
+    def dups_sure(request: Request, done: int = -1):
+        """Pairs that are certainly the same picture, resolved all at once after a look at a sample."""
+        with core.connect() as c:
+            pairs = core.sure_duplicates(c)
+            open_total = c.execute("SELECT COUNT(*) FROM dup_flags WHERE status='open'").fetchone()[0]
+            sample = []
+            for keep, drop in pairs[:30]:
+                k, d = (c.execute("SELECT id, sha256, width, height, source FROM posts WHERE id=?", (i,)).fetchone()
+                        for i in (keep, drop))
+                sample.append({"keep": k, "drop": d})
+        return tpl.TemplateResponse(request, "dups_sure.html", {"count": len(pairs), "sample": sample,
+                                                                 "open_total": open_total, "done": done})
+
+    @app.post("/dups/sure")
+    def dups_sure_resolve(expect: int = Form(...)):
+        """Resolve every sure pair. `expect` is the count the page showed: if more appeared since, the person hasn't
+        seen them, so nothing is done. Small transactions, so a running scrape isn't held up."""
+        with core.connect() as c:
+            pairs = core.sure_duplicates(c)
+        if len(pairs) > expect:
+            return RedirectResponse("/dups/sure", 303)
+        done = 0
+        for i in range(0, len(pairs), 50):
+            with core.connect() as c:
+                done += sum(core.resolve_duplicate(c, keep, drop) for keep, drop in pairs[i:i + 50])
+        print(f"sure duplicates: resolved {done} of {len(pairs)} pairs", flush=True)
+        return RedirectResponse(f"/dups/sure?done={done}", 303)
 
     @app.get("/dups/review")
     def dups_review(request: Request, skip: int = 0):
