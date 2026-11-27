@@ -20,6 +20,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from PIL import Image
 
 from . import clip, core, scraper, similar, themes, watcher
@@ -664,7 +665,15 @@ def create_app(scheduler: bool = False) -> FastAPI:
         The upload window sends big selections in small chunks (ajax=1, JSON answer); for "one post" the later chunks
         name the post the first one made (into=<id>). Empty files (iPhone Safari sends those when it can't get a photo,
         e.g. one still in iCloud) are skipped and reported instead of failing the whole batch."""
-        form = await request.form(max_files=1000)
+        try:
+            form = await request.form(max_files=1000)
+        except StarletteHTTPException as e:   # body the server can't read: log why (no names), for debugging phones
+            print(f"upload refused: {e.detail} (body {request.headers.get('content-length', '?')} bytes, "
+                  f"{request.headers.get('user-agent', '?')[:80]})", flush=True)
+            raise
+        if not any(k == "files" for k, _ in form.multi_items()):
+            print(f"upload without files (body {request.headers.get('content-length', '?')} bytes, "
+                  f"{request.headers.get('user-agent', '?')[:80]})", flush=True)
         tags, title, together = (str(form.get(k, "")) for k in ("tags", "title", "together"))
         ajax = form.get("ajax") == "1"
         parts = [v for k, v in form.multi_items() if k == "files" and hasattr(v, "read")]

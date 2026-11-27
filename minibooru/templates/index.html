@@ -54,20 +54,25 @@ form.addEventListener('submit',async e=>{
   let doneBytes=0,done=0,post=null,lost=[...empty.map(x=>x.name)],bad=[];
   const show=extra=>{bar.value=total?Math.min(1,(doneBytes+extra)/total):1;
     msg.textContent=done+' of '+plural(files.length,'file')+' uploaded ('+Math.round(100*bar.value)+'%)'};
+  let failsInRow=0,gaveUp=false,lastErr='';
   async function tryUp(list){            // two tries, then one file at a time so only the bad files are lost
     for(let attempt=0;attempt<2&&!stop;attempt++){
-      try{const r=await send(list,post,show);post=post||r.post;done+=list.length-r.empty.length-r.bad.length;
+      try{const r=await send(list,post,show);post=post||r.post;done+=list.length-r.empty.length-r.bad.length;failsInRow=0;
         lost.push(...r.empty);bad.push(...r.bad);doneBytes+=list.reduce((s,x)=>s+x.size,0);show(0);return}
-      catch(err){if(stop)return}}
+      catch(err){lastErr=err.message;if(stop)return}}
     if(stop)return;
     if(list.length>1){for(const x of list){if(stop)return;await tryUp([x])}return}
-    lost.push(list[0].name);doneBytes+=list[0].size;show(0)}
+    lost.push(list[0].name);doneBytes+=list[0].size;show(0);
+    if(++failsInRow>=5){gaveUp=stop=true}}   // everything failing (e.g. the phone can't read the picked files any more): stop
   show(0);
   for(const part of chunks(files)){if(stop)break;await tryUp(part)}
   busy=false;xhr=null;
   const dest=together&&post?'/post/'+post:'/';
   if(!stop&&!lost.length&&!bad.length){location.href=dest;return}
-  let t=(stop?'Stopped. ':'')+plural(done,'file')+' uploaded.';
+  let t=(gaveUp?'Stopped: the last 5 files all failed ('+lastErr+'). Reload the page and pick the files again; '+
+    'if they were in Files, check they are still there. ':stop?'Stopped. ':'')+plural(done,'file')+' uploaded.';
+  const untried=files.length-done-(lost.length-empty.length)-bad.length;
+  if(stop&&untried>0)t+=' '+plural(untried,'file')+(untried==1?' wasn\'t':' weren\'t')+' tried.';
   if(lost.length)t+=' '+plural(lost.length,'file')+' didn\'t arrive (empty or the connection failed): '+lost.slice(0,5).join(', ')+(lost.length>5?' and '+(lost.length-5)+' more':'')+'.';
   if(bad.length)t+=' '+plural(bad.length,'file')+' aren\'t pictures or videos: '+bad.slice(0,5).join(', ')+(bad.length>5?' …':'')+'.';
   msg.textContent=t;cancel.textContent='Done';cancel.onclick=()=>{location.href=dest};
