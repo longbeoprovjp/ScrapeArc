@@ -1,7 +1,6 @@
 # Screenshots
 
-Taken from a fresh demo install filled with the author's own photos, not a real archive: default name, colours and
-dark mode, with the author's photos as backgrounds. Retake them the same way if the UI changes.
+Taken from a fresh install with the default name, colours and dark mode. Retake them the same way if the UI changes.
 
 | File | What it shows |
 |---|---|

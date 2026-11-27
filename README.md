@@ -99,7 +99,6 @@ The authors don't endorse any particular site and aren't responsible for how the
 
 ## Credits
 
-- Screenshots: the background and demo posts are the author's own photos.
 - Built with FastAPI, SQLite, Pillow, httpx and Beautiful Soup.
 
 ## License
